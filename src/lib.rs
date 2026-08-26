@@ -7,6 +7,7 @@ mod admin_test;
 mod allowance;
 mod allowance_test;
 mod balance;
+mod balance_test;
 mod batch;
 mod batch_test;
 mod contract;
