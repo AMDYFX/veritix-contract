@@ -335,3 +335,20 @@ fn test_allowance_expiry_simulation() {
     );
     assert!(allowance_exists == true || allowance_exists == false);
 }
+
+#[test]
+fn test_total_supply_invariant_across_mint_and_burn() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let user = Address::generate(&e);
+    client.mint(&admin, &user, &1000);
+    assert_eq!(client.total_supply(), 1000);
+
+    client.burn(&user, &400);
+    assert_eq!(client.total_supply(), 600);
+}
