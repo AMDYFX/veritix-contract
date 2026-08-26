@@ -50,6 +50,12 @@ pub fn setup_recurring(
     e.storage()
         .persistent()
         .set(&DataKey::RecurringCount, &(id + 1));
+
+    let index_key = DataKey::PayerRecurrings(record.payer.clone());
+    let mut payer_ids: Vec<u32> = e.storage().persistent().get(&index_key).unwrap_or(Vec::new(e));
+    payer_ids.push_back(id);
+    e.storage().persistent().set(&index_key, &payer_ids);
+
     id
 }
 
@@ -147,4 +153,36 @@ pub fn cancel_recurring_batch(e: &Env, caller: &Address, recurring_ids: Vec<u32>
             e.storage().persistent().set(&DataKey::Recurring(id), &record);
         }
     }
+}
+
+pub fn cancel_recurring(e: &Env, caller: &Address, recurring_id: u32) {
+    caller.require_auth();
+    let mut record: RecurringRecord = e
+        .storage()
+        .persistent()
+        .get(&DataKey::Recurring(recurring_id))
+        .expect("recurring not found");
+    assert!(record.payer == *caller, "not the payer");
+    assert!(record.active, "recurring is not active");
+    record.active = false;
+    e.storage().persistent().set(&DataKey::Recurring(recurring_id), &record);
+
+    let index_key = DataKey::PayerRecurrings(record.payer.clone());
+    if let Some(ids) = e.storage().persistent().get::<_, Vec<u32>>(&index_key) {
+        let mut updated: Vec<u32> = Vec::new(e);
+        for i in 0..ids.len() {
+            let v = ids.get(i).unwrap();
+            if v != recurring_id {
+                updated.push_back(v);
+            }
+        }
+        e.storage().persistent().set(&index_key, &updated);
+    }
+}
+
+pub fn get_recurring_by_payer(e: &Env, payer: &Address) -> Vec<u32> {
+    e.storage()
+        .persistent()
+        .get(&DataKey::PayerRecurrings(payer.clone()))
+        .unwrap_or(Vec::new(e))
 }

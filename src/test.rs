@@ -65,7 +65,7 @@ fn test_emergency_withdraw_cannot_touch_escrow_funds() {
     // Create an escrow which locks 500 tokens in the contract
     let beneficiary = Address::generate(&e);
     let expiry = e.ledger().sequence() + 1000;
-    let id = client.create_escrow(
+    let _id = client.create_escrow(
         &depositor, &beneficiary, &token, &500, &expiry, &soroban_sdk::Bytes::new(&e)
     );
     

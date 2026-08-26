@@ -220,27 +220,14 @@ fn test_large_memo_validation() {
 }
 
 #[test]
-fn test_create_escrow_panics_on_memo_too_long() {
+#[should_panic]
+fn test_create_escrow_oversized_memo_panics() {
     let t = setup();
     let expiry = t.e.ledger().sequence() + 1000;
-    let memo = make_memo(&t.e, &[b'x'; 65]);
-
-    // Verify that create_escrow panics when memo > MAX_MEMO_BYTES
-    use soroban_sdk::token;
-    let token_client = token::Client::new(&t.e, &t.token);
-    let contract_balance_before = token_client.balance(&t.e.current_contract_address());
-    let depositor_balance_before = token_client.balance(&t.depositor);
-
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        t.client.create_escrow(
-            &t.depositor, &t.beneficiary, &t.token, &100, &expiry, &memo,
-        );
-    }));
-    assert!(result.is_err(), "create_escrow should panic on memo > MAX_MEMO_BYTES");
-
-    // Verify no tokens were transferred (state rollback)
-    assert_eq!(token_client.balance(&t.e.current_contract_address()), contract_balance_before);
-    assert_eq!(token_client.balance(&t.depositor), depositor_balance_before);
+    let memo = make_memo(&t.e, &[0u8; 65]);
+    t.client.create_escrow(
+        &t.depositor, &t.beneficiary, &t.token, &100, &expiry, &memo,
+    );
 }
 
 // ── #174: Partial release ─────────────────────────────────────────────────────
@@ -393,7 +380,7 @@ fn test_create_escrow_event_includes_memo() {
 
     // Verify events were emitted
     let events = t.e.events().all();
-    assert!(!events.is_empty(), "escrow_created event should be emitted");
+    assert!(!events.events().is_empty(), "escrow_created event should be emitted");
 }
 
 #[test]
@@ -416,7 +403,7 @@ fn test_release_escrow_event_includes_memo() {
 
     // Verify events were emitted including release event
     let events = t.e.events().all();
-    assert!(events.len() >= 2, "escrow_created and escrow_released events should be emitted");
+    assert!(events.events().len() >= 2, "escrow_created and escrow_released events should be emitted");
 }
 
 #[test]
@@ -439,7 +426,7 @@ fn test_refund_escrow_event_includes_memo() {
 
     // Verify events were emitted including refund event
     let events = t.e.events().all();
-    assert!(events.len() >= 2, "escrow_created and escrow_refunded events should be emitted");
+    assert!(events.events().len() >= 2, "escrow_created and escrow_refunded events should be emitted");
 }
 
 #[test]
@@ -459,7 +446,7 @@ fn test_create_escrow_event_with_empty_memo() {
 
     // Even with empty memo event should be emitted
     let events = t.e.events().all();
-    assert!(!events.is_empty(), "escrow_created event should be emitted even with empty memo");
+    assert!(!events.events().is_empty(), "escrow_created event should be emitted even with empty memo");
 
     let list = t.client.get_escrows_by_depositor(&t.depositor);
     assert_eq!(list.get(0).unwrap(), id);

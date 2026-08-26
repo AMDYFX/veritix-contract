@@ -112,3 +112,12 @@ pub fn admin_active_after_ledger(e: &Env) -> u32 {
         .get(&DataKey::AdminActiveAfter)
         .unwrap_or(0)
 }
+
+pub fn read_clawback_cosigner(e: &Env) -> Option<Address> {
+    e.storage().persistent().get(&DataKey::ClawbackCosigner)
+}
+
+pub fn set_clawback_cosigner(e: &Env, admin: &Address, cosigner: &Address) {
+    check_admin(e, admin);
+    e.storage().persistent().set(&DataKey::ClawbackCosigner, cosigner);
+}
