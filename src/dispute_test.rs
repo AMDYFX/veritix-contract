@@ -157,3 +157,19 @@ fn test_resolver_stats_accumulate_across_resolutions() {
     assert_eq!(stats.for_beneficiary, 1);
     assert_eq!(stats.for_depositor, 1);
 }
+
+#[test]
+#[should_panic(expected = "only depositor or beneficiary can open dispute")]
+fn test_open_dispute_unauthorized_party_panics() {
+    let t = setup();
+    soroban_sdk::token::StellarAssetClient::new(&t.e, &t.token).mint(&t.depositor, &10_000_000);
+    let stranger = Address::generate(&t.e);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id = t.client.create_escrow(
+        &t.depositor, &t.beneficiary, &t.token, &10_000_000, &expiry, &crate::escrow_test::empty_memo(&t.e),
+    );
+
+    t.e.as_contract(&t.client.address, || {
+        crate::dispute::open_dispute(t.e.clone(), stranger, id, 1);
+    });
+}

@@ -367,6 +367,9 @@ pub fn refund_escrow(e: Env, caller: Address, escrow_id: u32) {
 
     let mut record = load_record(&e, escrow_id);
 
+    let is_disputed: bool = e.storage().persistent().get(&DataKey::EscrowDispute(escrow_id)).unwrap_or(false);
+    assert!(!is_disputed, "cannot refund active dispute");
+
     assert!(!record.released, "already released");
     assert!(!record.refunded, "already refunded");
     assert!(

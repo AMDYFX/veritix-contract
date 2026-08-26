@@ -489,11 +489,13 @@ impl VeriTixPayTrait for VeriTixPay {
         allowance::create_allowance(&e, &from, &spender, amount, expiration_ledger);
     }
 
-    fn transfer_from(e: Env, spender: Address, from: Address, _to: Address, amount: i128) {
+    fn transfer_from(e: Env, spender: Address, from: Address, to: Address, amount: i128) {
+        crate::pause::require_not_paused(&e);
         spender.require_auth();
         require_positive_amount(amount);
         allowance::spend_allowance(&e, &from, &spender, amount);
-        // Implement the actual token transfer logic here
+        crate::balance::spend_balance(&e, &from, amount);
+        crate::balance::add_balance(&e, &to, amount);
     }
 
     // ── #451: Admin ownership ────────────────────────────────────────────────

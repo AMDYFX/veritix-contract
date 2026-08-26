@@ -15,8 +15,13 @@ pub fn get_arbiter(e: &Env) -> Address {
         .expect("arbiter not set")
 }
 
-pub fn open_dispute(e: Env, claimant: Address, _escrow_id: u32, dispute_id: u32) {
+pub fn open_dispute(e: Env, claimant: Address, escrow_id: u32, dispute_id: u32) {
     claimant.require_auth();
+    let record = load_record(&e, escrow_id);
+    assert!(
+        claimant == record.depositor || claimant == record.beneficiary,
+        "only depositor or beneficiary can open dispute"
+    );
     let mut disputes = get_disputes_by_claimant(e.clone(), claimant.clone());
     disputes.push_back(dispute_id);
     e.storage()
