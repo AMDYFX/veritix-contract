@@ -112,3 +112,22 @@ fn test_read_allowance_prunes_expired_entry() {
         assert_eq!(crate::allowance::get_allowances_for_spender(&e, &from).len(), 0);
     });
 }
+
+#[test]
+fn test_write_allowance_zero_removes_key() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, VeriTixPay);
+
+    let from = Address::generate(&e);
+    let spender = Address::generate(&e);
+
+    e.as_contract(&contract_id, || {
+        crate::allowance::write_allowance(&e, &from, &spender, 500, 100);
+        assert_eq!(crate::allowance::get_allowances_for_spender(&e, &from).len(), 1);
+
+        crate::allowance::write_allowance(&e, &from, &spender, 0, 100);
+        assert_eq!(crate::allowance::get_allowances_for_spender(&e, &from).len(), 0);
+    });
+}
