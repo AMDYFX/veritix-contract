@@ -152,3 +152,16 @@ pub fn get_disputes_by_claimant(e: Env, claimant: Address) -> Vec<u32> {
         .get(&DataKey::ClaimantDisputes(claimant))
         .unwrap_or(Vec::new(&e))
 }
+
+pub fn distribute_dividend(e: &Env, admin: &Address, total_dividend: i128, holders: Vec<Address>) {
+    crate::admin::check_admin(e, admin);
+    assert!(total_dividend > 0, "total_dividend must be positive");
+    if holders.is_empty() { return; }
+    let per_holder = total_dividend / holders.len() as i128;
+    let remainder = total_dividend % holders.len() as i128;
+    for i in 0..holders.len() {
+        let h = holders.get(i).unwrap();
+        let amount = if i == 0 { per_holder + remainder } else { per_holder };
+        crate::balance::add_balance(e, &h, amount);
+    }
+}
