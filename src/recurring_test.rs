@@ -43,10 +43,10 @@ fn test_max_executions_deactivates() {
     let payee = Address::generate(&e);
     // Create a test token
     let token = e.register_stellar_asset_contract(Address::generate(&e));
-    let token_client = token::Client::new(&e, &token);
+    let _token_client = token::Client::new(&e, &token);
     
     // Mint some tokens to the payer so transfers work
-    token_client.mint(&payer, &1000);
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &1000);
     
     let amount = 100;
     let interval = 100; // 100 ledgers between executions
@@ -103,7 +103,7 @@ fn test_max_executions_deactivates() {
 
 #[test]
 fn test_is_recurring_active() {
-    use soroban_sdk::{Address, token};
+    use soroban_sdk::Address;
     use crate::contract::{VeriTixPay, VeriTixPayClient};
 
     let e = Env::default();
@@ -115,8 +115,7 @@ fn test_is_recurring_active() {
     let payer = Address::generate(&e);
     let payee = Address::generate(&e);
     let token = e.register_stellar_asset_contract(payer.clone());
-    let token_client = token::Client::new(&e, &token);
-    token_client.mint(&payer, &1000);
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &1000);
 
     // Non-existent recurring should return false
     assert!(!client.is_recurring_active(&999));
@@ -135,11 +134,34 @@ fn test_is_recurring_active() {
     assert!(client.is_recurring_active(&recurring_id));
 
     // Execute all max executions to deactivate
-    for i in 1..=3 {
+    for _i in 1..=3 {
         e.ledger().with_mut(|l| l.sequence_number += 100);
         client.execute_recurring(&recurring_id);
     }
 
     // Should be inactive after max executions
     assert!(!client.is_recurring_active(&recurring_id));
+}
+
+#[test]
+fn test_cancel_recurring_removes_from_payer_index() {
+    use soroban_sdk::{testutils::Address as _, Address};
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let payer = Address::generate(&e);
+    let payee = Address::generate(&e);
+    let token = e.register_stellar_asset_contract(Address::generate(&e));
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &1000);
+
+    let id = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+    let list_before = client.get_recurring_by_payer(&payer);
+    assert_eq!(list_before.len(), 1);
+
+    client.cancel_recurring(&payer, &id);
+    let list_after = client.get_recurring_by_payer(&payer);
+    assert_eq!(list_after.len(), 0);
 }

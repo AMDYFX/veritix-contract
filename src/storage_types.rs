@@ -66,6 +66,8 @@ pub enum DataKey {
     MaxSupply,
     Paused,
     Nonce(Address),
+    PayerRecurrings(Address),
+    ClawbackCosigner,
 }
 
 // Closes #570: per-depositor escrow count limit

@@ -66,7 +66,58 @@ pub fn burn_from(e: &Env, spender: &Address, from: &Address, amount: i128) {
     decrease_supply(e, amount);
 }
 
+pub fn read_balance(e: &Env, account: &Address) -> i128 {
+    balance_of(e, account)
+}
+
 pub fn add_balance(e: &Env, account: &Address, amount: i128) {
-    let bal = balance_of(e, account);
-    e.storage().persistent().set(&DataKey::BalanceOf(account.clone()), &(bal + amount));
+    receive_balance(e, account, amount);
+}
+
+pub fn receive_balance(e: &Env, account: &Address, amount: i128) {
+    if *account == e.current_contract_address() { return; }
+    let current = balance_of(e, account);
+    let new_balance = current.checked_add(amount).expect("balance overflow");
+    e.storage().persistent().set(&DataKey::BalanceOf(account.clone()), &new_balance);
+    update_holder_set(e, account);
+}
+
+pub fn spend_balance(e: &Env, account: &Address, amount: i128) {
+    let current = balance_of(e, account);
+    assert!(current >= amount, "insufficient balance");
+    let new_balance = current - amount;
+    let key = DataKey::BalanceOf(account.clone());
+    if new_balance == 0 {
+        e.storage().persistent().remove(&key);
+    } else {
+        e.storage().persistent().set(&key, &new_balance);
+    }
+    update_holder_set(e, account);
+}
+
+pub fn update_holder_set(e: &Env, addr: &Address) {
+    if *addr == e.current_contract_address() { return; }
+    let bal = balance_of(e, addr);
+    let mut count: u32 = e.storage().persistent().get(&DataKey::HolderCount).unwrap_or(0);
+    let mut holders: soroban_sdk::Vec<Address> = e.storage().persistent().get(&DataKey::HolderSet).unwrap_or(soroban_sdk::Vec::new(e));
+    let mut exists = false;
+    let mut idx = 0;
+    for i in 0..holders.len() {
+        if holders.get(i).unwrap() == *addr {
+            exists = true;
+            idx = i;
+            break;
+        }
+    }
+    if bal > 0 && !exists {
+        holders.push_back(addr.clone());
+        count += 1;
+        e.storage().persistent().set(&DataKey::HolderSet, &holders);
+        e.storage().persistent().set(&DataKey::HolderCount, &count);
+    } else if bal == 0 && exists {
+        holders.remove(idx);
+        if count > 0 { count -= 1; }
+        e.storage().persistent().set(&DataKey::HolderSet, &holders);
+        e.storage().persistent().set(&DataKey::HolderCount, &count);
+    }
 }

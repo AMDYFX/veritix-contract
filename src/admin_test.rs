@@ -32,6 +32,13 @@ fn test_transfer_ownership_sets_proposed_admin() {
 }
 
 #[test]
+#[should_panic(expected = "cannot propose current admin")]
+fn test_transfer_ownership_self_proposal_panics() {
+    let t = setup();
+    t.client.transfer_ownership(&t.admin);
+}
+
+#[test]
 fn test_accept_admin_sets_new_admin_with_delay() {
     let t = setup();
     t.client.transfer_ownership(&t.new_admin);

@@ -183,6 +183,12 @@ pub trait VeriTixPayTrait {
     fn split_to_escrow(e: Env, sender: Address, recipients: Vec<(Address, u32)>, token: Address, total_amount: i128, expiry_ledger: u32) -> Vec<u32>;
     fn airdrop(e: Env, admin: Address, token: Address, total_amount: i128);
     fn permit_batch(e: Env, owner: Address, approvals: Vec<(Address, i128, u32)>, nonce: u64, public_key: BytesN<32>, signature: BytesN<64>);
+    fn replace_split_recipient(e: Env, sender: Address, split_id: u32, old_recipient: Address, new_recipient: Address);
+    fn approve_batch(e: Env, from: Address, approvals: Vec<(Address, i128, u32)>);
+    fn clawback_batch(e: Env, admin: Address, clawbacks: Vec<(Address, i128)>);
+    fn mint_batch(e: Env, admin: Address, mints: Vec<(Address, i128)>) -> i128;
+    fn cancel_recurring(e: Env, caller: Address, recurring_id: u32);
+    fn get_recurring_by_payer(e: Env, payer: Address) -> Vec<u32>;
 }
 
 #[contracttype]
@@ -598,6 +604,30 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn cancel_split(e: Env, caller: Address, split_id: u32) {
         crate::splitter::cancel_split(e, caller, split_id)
+    }
+
+    fn replace_split_recipient(e: Env, sender: Address, split_id: u32, old_recipient: Address, new_recipient: Address) {
+        crate::splitter::replace_split_recipient(e, sender, split_id, old_recipient, new_recipient)
+    }
+
+    fn approve_batch(e: Env, from: Address, approvals: Vec<(Address, i128, u32)>) {
+        crate::batch::approve_batch(&e, from, approvals);
+    }
+
+    fn clawback_batch(e: Env, admin: Address, clawbacks: Vec<(Address, i128)>) {
+        crate::batch::clawback_batch(&e, admin, clawbacks);
+    }
+
+    fn mint_batch(e: Env, admin: Address, mints: Vec<(Address, i128)>) -> i128 {
+        crate::batch::mint_batch(&e, admin, mints)
+    }
+
+    fn cancel_recurring(e: Env, caller: Address, recurring_id: u32) {
+        recurring::cancel_recurring(&e, &caller, recurring_id);
+    }
+
+    fn get_recurring_by_payer(e: Env, payer: Address) -> Vec<u32> {
+        recurring::get_recurring_by_payer(&e, &payer)
     }
 
     fn topup_escrow(e: Env, depositor: Address, escrow_id: u32, amount: i128) {
