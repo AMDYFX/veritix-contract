@@ -41,6 +41,7 @@ pub fn permit_batch(
     if approvals.len() > 20 {
         panic!("TooManyApprovals: maximum 20 approvals per batch");
     }
+    assert!(public_key.to_array().len() == 32, "invalid public_key byte length");
 
     let current_nonce = read_nonce(e, &owner);
     if nonce != current_nonce {
