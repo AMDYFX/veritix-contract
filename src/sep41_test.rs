@@ -148,7 +148,7 @@ fn test_mint_increases_supply() {
 
 #[test]
 fn test_set_admin_rotates_admin() {
-    let (e, client, admin, _user) = setup();
+    let (e, client, _admin, _user) = setup();
     let new_admin = Address::generate(&e);
     client.transfer_ownership(&new_admin);
     // Advance past the activation delay

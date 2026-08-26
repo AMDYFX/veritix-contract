@@ -14,7 +14,7 @@ pub struct SplitRecord {
     pub cancelled: bool,
 }
 
-fn load_record(e: &Env, split_id: u32) -> SplitRecord {
+pub fn load_record(e: &Env, split_id: u32) -> SplitRecord {
     e.storage()
         .persistent()
         .get(&DataKey::Split(split_id))

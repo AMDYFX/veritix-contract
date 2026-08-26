@@ -2,6 +2,8 @@
 
 use soroban_sdk::{testutils::{Address as _, Ledger as _}, Address, Env};
 use crate::test::create_token_contract;
+use crate::storage_types::DataKey;
+use crate::contract::VeriTixPay;
 
 #[test]
 fn test_allowance_valid_at_expiry_ledger() {
@@ -89,22 +91,24 @@ pub fn require_initialized(e: &Env) {
     }
 }
 
-// ── #451: One-step admin change with time-delay ──────────────────────────────
+#[test]
+fn test_read_allowance_prunes_expired_entry() {
+    let e = Env::default();
+    e.mock_all_auths();
 
-pub fn transfer_ownership(e: &Env, new_admin: &Address) {
-    let current_admin: Address = e
-        .storage()
-        .persistent()
-        .get(&DataKey::Admin)
-        .expect("admin not set");
-    current_admin.require_auth();
+    let contract_id = e.register_contract(None, VeriTixPay);
 
-    e.storage()
-        .persistent()
-        .set(&DataKey::ProposedAdmin, new_admin);
+    let from = Address::generate(&e);
+    let spender = Address::generate(&e);
 
-    e.events().publish(
-        (soroban_sdk::symbol_short!("ownership"),),
-        (current_admin, new_admin.clone()),
-    );
+    e.as_contract(&contract_id, || {
+        crate::allowance::create_allowance(&e, &from, &spender, 500, 10);
+        assert_eq!(crate::allowance::get_allowances_for_spender(&e, &from).len(), 1);
+
+        e.ledger().with_mut(|l| l.sequence_number = 20);
+
+        let allowance = crate::allowance::read_allowance(&e, &from, &spender);
+        assert_eq!(allowance.amount, 0);
+        assert_eq!(crate::allowance::get_allowances_for_spender(&e, &from).len(), 0);
+    });
 }

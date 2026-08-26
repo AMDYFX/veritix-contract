@@ -12,9 +12,11 @@ pub fn write_allowance(e: &Env, from: &Address, spender: &Address, amount: i128,
     let key = DataKey::Allowance(from.clone(), spender.clone());
     if amount == 0 {
         e.storage().persistent().remove(&key);
+        write_owner_allowance_index(e, from, spender, false);
     } else {
         let allowance = Allowance { amount, expiration_ledger };
         e.storage().persistent().set(&key, &allowance);
+        write_owner_allowance_index(e, from, spender, true);
     }
 }
 
@@ -84,10 +86,16 @@ pub fn transfer_ownership(e: &Env, new_admin: &Address) {
 
 pub fn read_allowance(e: &Env, from: &Address, spender: &Address) -> Allowance {
     let key = DataKey::Allowance(from.clone(), spender.clone());
-    e.storage().persistent().get(&key).unwrap_or(Allowance {
-        amount: 0,
-        expiration_ledger: 0,
-    })
+    if let Some(allowance) = e.storage().persistent().get::<_, Allowance>(&key) {
+        if allowance.expiration_ledger < e.ledger().sequence() && allowance.expiration_ledger != 0 {
+            e.storage().persistent().remove(&key);
+            write_owner_allowance_index(e, from, spender, false);
+            return Allowance { amount: 0, expiration_ledger: 0 };
+        }
+        allowance
+    } else {
+        Allowance { amount: 0, expiration_ledger: 0 }
+    }
 }
 
 pub fn spend_allowance(e: &Env, from: &Address, spender: &Address, amount: i128) {
@@ -152,4 +160,33 @@ pub fn track_spender(e: &Env, from: &Address, spender: &Address) {
         spenders.push_back(spender.clone());
         e.storage().persistent().set(&DataKey::AllowanceSpenders(from.clone()), &spenders);
     }
+}
+
+pub fn write_owner_allowance_index(e: &Env, from: &Address, spender: &Address, add: bool) {
+    let spenders: soroban_sdk::Vec<Address> = e.storage().persistent()
+        .get(&DataKey::AllowanceSpenders(from.clone()))
+        .unwrap_or(soroban_sdk::Vec::new(e));
+    if add {
+        track_spender(e, from, spender);
+    } else {
+        let mut updated = soroban_sdk::Vec::new(e);
+        for i in 0..spenders.len() {
+            if let Some(s) = spenders.get(i) {
+                if s != *spender {
+                    updated.push_back(s);
+                }
+            }
+        }
+        if updated.is_empty() {
+            e.storage().persistent().remove(&DataKey::AllowanceSpenders(from.clone()));
+        } else {
+            e.storage().persistent().set(&DataKey::AllowanceSpenders(from.clone()), &updated);
+        }
+    }
+}
+
+pub fn get_allowances_for_spender(e: &Env, from: &Address) -> soroban_sdk::Vec<Address> {
+    e.storage().persistent()
+        .get(&DataKey::AllowanceSpenders(from.clone()))
+        .unwrap_or(soroban_sdk::Vec::new(e))
 }
