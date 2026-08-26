@@ -66,6 +66,8 @@ pub fn transfer_ownership(e: &Env, new_admin: &Address) {
         .expect("admin not set");
     current_admin.require_auth();
 
+    assert!(*new_admin != current_admin, "cannot propose current admin");
+
     e.storage()
         .persistent()
         .set(&DataKey::ProposedAdmin, new_admin);
