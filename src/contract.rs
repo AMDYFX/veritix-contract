@@ -1235,3 +1235,25 @@ impl VeritixContract {
             .unwrap_or_else(|| Vec::new(&e))
     }
 }
+
+use soroban_sdk::{contract, contractimpl, Env};
+use crate::storage_types::DataKey;
+
+#[contract]
+pub struct VeritixContract;
+
+#[contractimpl]
+impl VeritixContract {
+    /// Returns a boolean indicating whether a recurring payment schedule is currently active and not paused,
+    /// avoiding the overhead of fetching the full payment record.
+    pub fn is_recurring_active(e: Env, recurring_id: u32) -> bool {
+        let key = DataKey::Recurring(recurring_id);
+        
+        // Retrieve the recurring record from storage instance/persistent storage
+        if let Some(recurring) = e.storage().instance().get::<DataKey, crate::storage_types::RecurringPayment>(&key) {
+            recurring.active && !recurring.paused
+        } else {
+            false
+        }
+    }
+}

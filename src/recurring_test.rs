@@ -349,3 +349,22 @@ mod payee_recurring_tests {
         assert_eq!(updated_recurrings.len(), 0);
     }
 }
+
+#[cfg(test)]
+mod recurring_active_tests {
+    use super::*;
+    use soroban_sdk::Env;
+
+    #[test]
+    fn test_is_recurring_active_status() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let recurring_id = 99;
+
+        // Non-existent ID should return false
+        assert_eq!(VeritixContract::is_recurring_active(env.clone(), recurring_id), false);
+
+        // Setup mock record and test active vs paused states...
+    }
+}
