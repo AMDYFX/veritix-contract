@@ -1206,3 +1206,82 @@ impl VeriTixPayTrait for VeriTixPay {
         whitelist::add_to_whitelist_batch(&e, &admin, &accounts)
     }
 }
+
+use soroban_sdk::{contract, contractimpl, Env, Vec};
+use crate::storage_types::RecurringExecution;
+
+#[contract]
+pub struct VeritixContract;
+
+#[contractimpl]
+impl VeritixContract {
+    /// Retrieves the execution audit log for a specific recurring payment schedule.
+    pub fn get_recurring_history(e: Env, recurring_id: u32) -> Vec<RecurringExecution> {
+        let key = DataKey::RecurringHistory(recurring_id);
+        e.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(&e))
+    }
+}
+
+use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
+use crate::storage_types::DataKey;
+
+#[contract]
+pub struct VeritixContract;
+
+#[contractimpl]
+impl VeritixContract {
+    /// Retrieves all recurring payment IDs associated with a specific payee address.
+    pub fn get_recurring_by_payee(e: Env, payee: Address) -> Vec<u32> {
+        let key = DataKey::PayeeRecurrings(payee);
+        e.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(&e))
+    }
+}
+
+use soroban_sdk::{contract, contractimpl, Env};
+use crate::storage_types::DataKey;
+
+#[contract]
+pub struct VeritixContract;
+
+#[contractimpl]
+impl VeritixContract {
+    /// Returns a boolean indicating whether a recurring payment schedule is currently active and not paused,
+    /// avoiding the overhead of fetching the full payment record.
+    pub fn is_recurring_active(e: Env, recurring_id: u32) -> bool {
+        let key = DataKey::Recurring(recurring_id);
+        
+        // Retrieve the recurring record from storage instance/persistent storage
+        if let Some(recurring) = e.storage().instance().get::<DataKey, crate::storage_types::RecurringPayment>(&key) {
+            recurring.active && !recurring.paused
+        } else {
+            false
+        }
+    }
+}
+
+use soroban_sdk::{contract, contractimpl, Address, Env, Option};
+use crate::storage_types::DataKey;
+
+#[contract]
+pub struct VeritixContract;
+
+#[contractimpl]
+impl VeritixContract {
+    /// Sets the protocol fee and treasury address for split distributions (admin-only, max 2%).
+    pub fn set_split_protocol_fee(e: Env, admin: Address, fee_bps: u32, treasury: Address) {
+        crate::splitter::set_split_fee_config(&e, &admin, fee_bps, &treasury);
+    }
+
+    /// Retrieves the current split protocol fee basis points and treasury address.
+    pub fn get_split_protocol_fee(e: Env) -> (u32, Option<Address>) {
+        let fee_bps: u32 = e.storage().instance().get(&DataKey::SplitProtocolFeeBps).unwrap_or(0);
+        let treasury: Option<Address> = e.storage().instance().get(&DataKey::SplitProtocolTreasury);
+        (fee_bps, treasury)
+    }
+}

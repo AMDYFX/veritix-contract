@@ -9,7 +9,7 @@ Report privately via [GitHub Security Advisories](https://github.com/Lead-Studio
 Include:
 - Affected function(s) or module(s)
 - Steps to reproduce or a proof-of-concept
-- Potential impact
+- Potential impact.
 
 **Response timeline:**
 - Acknowledgment within **48 hours**

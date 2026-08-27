@@ -273,3 +273,52 @@ pub fn get_recurring_by_payer(e: &Env, payer: &Address) -> Vec<u32> {
         .get(&DataKey::PayerRecurrings(payer.clone()))
         .unwrap_or(Vec::new(e))
 }
+
+use soroban_sdk::{Env, Vec};
+use crate::storage_types::{DataKey, RecurringExecution};
+
+pub fn record_execution(e: &Env, recurring_id: u32, amount: i128) {
+    let ledger = e.ledger().sequence();
+    let execution = RecurringExecution {
+        recurring_id,
+        execution_ledger: ledger,
+        amount,
+    };
+
+    let key = DataKey::RecurringHistory(recurring_id);
+    let mut history: Vec<RecurringExecution> = e
+        .storage()
+        .instance()
+        .get(&key)
+        .unwrap_or_else(|| Vec::new(e));
+
+    history.push_back(execution);
+    e.storage().instance().set(&key, &history);
+}
+
+use soroban_sdk::{Address, Env, Vec};
+use crate::storage_types::DataKey;
+
+pub fn index_recurring_for_payee(e: &Env, payee: &Address, recurring_id: u32) {
+    let key = DataKey::PayeeRecurrings(payee.clone());
+    let mut recurrings: Vec<u32> = e
+        .storage()
+        .instance()
+        .get(&key)
+        .unwrap_or_else(|| Vec::new(e));
+
+    if !recurrings.contains(recurring_id) {
+        recurrings.push_back(recurring_id);
+        e.storage().instance().set(&key, &recurrings);
+    }
+}
+
+pub fn remove_recurring_for_payee(e: &Env, payee: &Address, recurring_id: u32) {
+    let key = DataKey::PayeeRecurrings(payee.clone());
+    if let Some(mut recurrings) = e.storage().instance().get::<DataKey, Vec<u32>>(&key) {
+        if let Some(index) = recurrings.iter().position(|id| id == recurring_id) {
+            recurrings.remove(index as u32);
+            e.storage().instance().set(&key, &recurrings);
+        }
+    }
+}

@@ -10,7 +10,7 @@ for contract upgrades.
 > signatures, event topics, storage keys) increment the **major** version.
 > Additive changes (new functions, new events, new optional memo fields)
 > increment the **minor** version. Internal refactors and dependency bumps
-> increment the **patch** version.
+> increment the **patch** version..
 
 ## [Unreleased]
 

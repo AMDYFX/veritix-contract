@@ -517,3 +517,32 @@ mod tests {
         assert_eq!(token_client.balance(&contract_id), 0);
     }
 }
+
+#[cfg(test)]
+mod splitter_fee_tests {
+    use super::*;
+    use soroban_sdk::Env;
+
+    #[test]
+    fn test_split_protocol_fee_configuration_and_calculation() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let treasury = Address::generate(&env);
+        let fee_bps = 100; // 1%
+
+        // Set split protocol fee
+        VeritixContract::set_split_protocol_fee(env.clone(), admin, fee_bps, treasury.clone());
+
+        // Verify getter view
+        let (fetched_bps, fetched_treasury) = VeritixContract::get_split_protocol_fee(env.clone());
+        assert_eq!(fetched_bps, fee_bps);
+        assert_eq!(fetched_treasury.unwrap(), treasury);
+
+        // Test fee calculation on a 10,000 token split distribution
+        let (remainder, fee_info) = crate::splitter::calculate_split_fee(&env, 10000_i128);
+        assert_eq!(remainder, 9900_i128);
+        assert_eq!(fee_info.unwrap().1, 100_i128);
+    }
+}
