@@ -1,5 +1,5 @@
 use crate::storage_types::DataKey;
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, Env, Vec};
 
 pub fn enable(e: &Env, admin: &Address) {
     crate::admin::check_admin(e, admin);
