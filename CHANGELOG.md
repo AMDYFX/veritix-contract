@@ -21,6 +21,15 @@ for contract upgrades.
 - Inline doc comments explaining the purpose of each test scenario across all test files.
 - Architecture document (`docs/architecture.md`) covering module responsibilities,
   data flow, storage layout, auth model, events, and integration points.
+- Recurring execution window (`set_recurring_execution_window`) — recurring
+  executions past `last_charged + interval + window` panic with
+  `ExecutionWindowExpired` so keepers cannot run stale payments.
+- `add_to_whitelist_signed` — bulk whitelist (max 200 addresses) via a single
+  signed message with admin-nonce replay protection.
+- `freeze_until` — freeze an account until a specific ledger; the freeze
+  auto-clears once the current ledger passes the expiry ledger.
+- Test coverage for `freeze_until`, vesting schedules, the recurring execution
+  window, and the signed bulk whitelist.
 
 ### Changed.
 
