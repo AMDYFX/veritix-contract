@@ -238,6 +238,8 @@ pub trait VeriTixPayTrait {
     fn expire_dispute(e: Env, caller: Address, escrow_id: u32);
     fn pause_recurring(e: Env, caller: Address, recurring_id: u32);
     fn resume_recurring(e: Env, caller: Address, recurring_id: u32);
+    // #741: batch whitelist add (max 50 accounts)
+    fn add_to_whitelist_batch(e: Env, admin: Address, accounts: Vec<Address>);
 }
 
 #[contracttype]
@@ -1189,6 +1191,8 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn set_protocol_fee(e: Env, admin: Address, fee_bps: u32, treasury: Address) {
         admin::check_admin(&e, &admin);
+        // #745: cap the protocol fee at 500 basis points (5%)
+        assert!(fee_bps <= 500, "protocol fee cannot exceed 500 bps");
         e.storage().persistent().set(&DataKey::FeeBps, &fee_bps);
         e.storage()
             .persistent()
@@ -1197,5 +1201,9 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn trigger_auto_release(e: Env, escrow_id: u32) {
         escrow::trigger_auto_release(e, escrow_id)
+    }
+
+    fn add_to_whitelist_batch(e: Env, admin: Address, accounts: Vec<Address>) {
+        whitelist::add_to_whitelist_batch(&e, &admin, &accounts)
     }
 }

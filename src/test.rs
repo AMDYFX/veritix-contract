@@ -594,3 +594,156 @@ fn test_get_contract_info_with_max_supply_initialization() {
     assert_eq!(info.is_paused, false);
     assert_eq!(info.initialized_at_ledger, init_ledger);
 }
+
+// ── #741: Whitelist mode ─────────────────────────────────────────────────────
+
+#[test]
+#[should_panic(expected = "sender not whitelisted")]
+fn test_whitelist_enable_blocks_non_whitelisted_transfer() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    let from = Address::generate(&e);
+    let to = Address::generate(&e);
+    token_admin.mint(&from, &1000);
+    token_admin.mint(&to, &1000);
+
+    client.enable_whitelist(&admin);
+    // Neither party is whitelisted — the transfer is blocked.
+    client.transfer_with_memo(&from, &to, &100, &Bytes::new(&e));
+}
+
+#[test]
+fn test_whitelist_add_to_whitelist_allows_transfer() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    let token_client = token::Client::new(&e, &token);
+    let from = Address::generate(&e);
+    let to = Address::generate(&e);
+    token_admin.mint(&from, &1000);
+    token_admin.mint(&to, &1000);
+
+    client.enable_whitelist(&admin);
+    client.add_to_whitelist(&admin, &from);
+    client.add_to_whitelist(&admin, &to);
+
+    client.transfer_with_memo(&from, &to, &100, &Bytes::new(&e));
+    assert_eq!(token_client.balance(&to), 1100);
+}
+
+#[test]
+#[should_panic(expected = "sender not whitelisted")]
+fn test_whitelist_remove_from_whitelist_blocks_transfer() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    let from = Address::generate(&e);
+    let to = Address::generate(&e);
+    token_admin.mint(&from, &1000);
+    token_admin.mint(&to, &1000);
+
+    client.enable_whitelist(&admin);
+    client.add_to_whitelist(&admin, &from);
+    client.add_to_whitelist(&admin, &to);
+    client.remove_from_whitelist(&admin, &from);
+
+    // Removing the sender from the whitelist blocks the transfer again.
+    client.transfer_with_memo(&from, &to, &100, &Bytes::new(&e));
+}
+
+#[test]
+fn test_whitelist_disable_allows_all_transfers() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    let token_client = token::Client::new(&e, &token);
+    let from = Address::generate(&e);
+    let to = Address::generate(&e);
+    token_admin.mint(&from, &1000);
+    token_admin.mint(&to, &1000);
+
+    client.enable_whitelist(&admin);
+    client.disable_whitelist(&admin);
+
+    // Disabling whitelist mode allows all transfers again.
+    client.transfer_with_memo(&from, &to, &100, &Bytes::new(&e));
+    assert_eq!(token_client.balance(&to), 1100);
+}
+
+#[test]
+fn test_is_whitelisted_returns_false_by_default() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    client.enable_whitelist(&admin);
+    let user = Address::generate(&e);
+    assert!(!client.is_whitelisted(&user));
+}
+
+#[test]
+fn test_whitelist_add_batch_50_max() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+    client.enable_whitelist(&admin);
+
+    let mut accounts = Vec::new(&e);
+    for _ in 0..50 {
+        accounts.push_back(Address::generate(&e));
+    }
+
+    client.add_to_whitelist_batch(&admin, &accounts);
+    assert!(client.is_whitelisted(&accounts.get(0).unwrap()));
+    assert!(client.is_whitelisted(&accounts.get(49).unwrap()));
+}
+
+#[test]
+#[should_panic(expected = "TooManyAccounts: maximum 50 accounts per batch")]
+fn test_whitelist_add_over_50_panics() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+    client.enable_whitelist(&admin);
+
+    let mut accounts = Vec::new(&e);
+    for _ in 0..51 {
+        accounts.push_back(Address::generate(&e));
+    }
+
+    client.add_to_whitelist_batch(&admin, &accounts);
+}

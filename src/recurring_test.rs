@@ -295,3 +295,120 @@ fn test_resume_recurring_non_payer_panics() {
     // A non-payer caller must not be able to resume another payer's recurring payment.
     client.resume_recurring(&intruder, &id);
 }
+
+// ── #736: amend_recurring ────────────────────────────────────────────────────
+
+fn read_recurring_record(
+    e: &Env,
+    contract_id: &Address,
+    id: u32,
+) -> crate::recurring::RecurringRecord {
+    e.as_contract(contract_id, || {
+        e.storage()
+            .persistent()
+            .get(&crate::storage_types::DataKey::Recurring(id))
+            .unwrap()
+    })
+}
+
+fn amend_setup() -> (
+    Env,
+    crate::contract::VeriTixPayClient<'static>,
+    Address,
+    Address,
+    Address,
+    u32,
+    Address,
+) {
+    use soroban_sdk::testutils::Address as _;
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let payer = Address::generate(&e);
+    let payee = Address::generate(&e);
+    let token = e.register_stellar_asset_contract(Address::generate(&e));
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &1000);
+
+    let id = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+    (e, client, payer, payee, token, id, contract_id)
+}
+
+#[test]
+fn test_amend_recurring_new_amount_only_succeeds() {
+    use soroban_sdk::testutils::Address as _;
+    let (e, client, payer, _payee, _token, id, contract_id) = amend_setup();
+
+    // Only the amount changes; the interval stays at 100.
+    client.amend_recurring(&payer, &id, &200, &100);
+    let record = read_recurring_record(&e, &contract_id, id);
+    assert_eq!(record.amount, 200);
+    assert_eq!(record.interval, 100);
+}
+
+#[test]
+fn test_amend_recurring_new_interval_only_succeeds() {
+    use soroban_sdk::testutils::Address as _;
+    let (e, client, payer, _payee, _token, id, contract_id) = amend_setup();
+
+    // Only the interval changes; the amount stays at 100.
+    client.amend_recurring(&payer, &id, &100, &200);
+    let record = read_recurring_record(&e, &contract_id, id);
+    assert_eq!(record.amount, 100);
+    assert_eq!(record.interval, 200);
+}
+
+#[test]
+fn test_amend_recurring_both_fields_succeeds() {
+    use soroban_sdk::testutils::Address as _;
+    let (e, client, payer, _payee, _token, id, contract_id) = amend_setup();
+
+    client.amend_recurring(&payer, &id, &250, &150);
+    let record = read_recurring_record(&e, &contract_id, id);
+    assert_eq!(record.amount, 250);
+    assert_eq!(record.interval, 150);
+}
+
+#[test]
+#[should_panic(expected = "amount must be positive")]
+fn test_amend_recurring_neither_field_panics() {
+    use soroban_sdk::testutils::Address as _;
+    let (_e, client, payer, _payee, _token, id) = amend_setup();
+    client.amend_recurring(&payer, &id, &0, &0);
+}
+
+#[test]
+#[should_panic(expected = "amount must be positive")]
+fn test_amend_recurring_zero_amount_panics() {
+    use soroban_sdk::testutils::Address as _;
+    let (_e, client, payer, _payee, _token, id) = amend_setup();
+    client.amend_recurring(&payer, &id, &0, &100);
+}
+
+#[test]
+#[should_panic(expected = "interval must be positive")]
+fn test_amend_recurring_zero_interval_panics() {
+    use soroban_sdk::testutils::Address as _;
+    let (_e, client, payer, _payee, _token, id) = amend_setup();
+    client.amend_recurring(&payer, &id, &100, &0);
+}
+
+#[test]
+#[should_panic(expected = "not the payer")]
+fn test_amend_recurring_wrong_payer_panics() {
+    use soroban_sdk::testutils::Address as _;
+    let (_e, client, _payer, payee, _token, id) = amend_setup();
+    // Only the payer may amend the recurring payment.
+    client.amend_recurring(&payee, &id, &200, &100);
+}
+
+#[test]
+#[should_panic(expected = "recurring is not active")]
+fn test_amend_recurring_inactive_panics() {
+    use soroban_sdk::testutils::Address as _;
+    let (_e, client, payer, _payee, _token, id) = amend_setup();
+    client.cancel_recurring(&payer, &id);
+    client.amend_recurring(&payer, &id, &200, &100);
+}
