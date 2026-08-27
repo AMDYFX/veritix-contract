@@ -357,6 +357,10 @@ fn test_total_supply_invariant_across_mint_and_burn() {
 
 #[test]
 fn test_create_vesting_locks_tokens_and_claim_succeeds_after_vesting() {
+// ── #687: get_contract_info ───────────────────────────────────────────────────
+
+#[test]
+fn test_get_contract_info_after_initialize() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -411,6 +415,20 @@ fn test_create_vesting_claim_before_vesting_panics() {
 #[test]
 #[should_panic(expected = "vesting already claimed")]
 fn test_create_vesting_double_claim_panics() {
+
+    let admin = Address::generate(&e);
+    let init_ledger = e.ledger().sequence();
+    client.initialize(&admin);
+
+    let info = client.get_contract_info();
+    assert_eq!(info.admin, admin);
+    assert_eq!(info.version, soroban_sdk::String::from_str(&e, "1.0.0"));
+    assert_eq!(info.is_paused, false);
+    assert_eq!(info.initialized_at_ledger, init_ledger);
+}
+
+#[test]
+fn test_get_contract_info_reflects_pause_state() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -435,6 +453,17 @@ fn test_create_vesting_double_claim_panics() {
 #[test]
 #[should_panic(expected = "vesting ledger must be in the future")]
 fn test_create_vesting_rejects_past_ledger() {
+
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    client.set_paused(&admin, &true);
+    let info = client.get_contract_info();
+    assert_eq!(info.is_paused, true);
+}
+
+#[test]
+fn test_get_contract_info_with_max_supply_initialization() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -446,4 +475,13 @@ fn test_create_vesting_rejects_past_ledger() {
     let holder = Address::generate(&e);
 
     client.create_vesting(&admin, &holder, &token, &500, &e.ledger().sequence());
+
+    let admin = Address::generate(&e);
+    let init_ledger = e.ledger().sequence();
+    client.initialize_with_max_supply(&admin, &1_000_000);
+
+    let info = client.get_contract_info();
+    assert_eq!(info.admin, admin);
+    assert_eq!(info.is_paused, false);
+    assert_eq!(info.initialized_at_ledger, init_ledger);
 }
