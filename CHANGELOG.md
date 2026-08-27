@@ -21,6 +21,13 @@ for contract upgrades.
 - Inline doc comments explaining the purpose of each test scenario across all test files.
 - Architecture document (`docs/architecture.md`) covering module responsibilities,
   data flow, storage layout, auth model, events, and integration points.
+- `add_to_whitelist_batch` — whitelist up to 50 accounts in a single admin call.
+- Cap `set_protocol_fee` at 500 bps (5%) to keep the protocol fee bounded.
+- Events for `setup_recurring`, `execute_recurring`, and `cancel_recurring`
+  (`rcr_set`, `rcr_exec`, `rcr_cnl`) so off-chain indexers can track recurring
+  lifecycle changes.
+- Test coverage for protocol fees, whitelist mode, `amend_recurring`, and event
+  emission across state-changing functions.
 
 ### Changed.
 
