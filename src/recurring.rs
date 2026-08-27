@@ -253,7 +253,6 @@ pub fn get_recurring_by_payer(e: &Env, payer: &Address) -> Vec<u32> {
 /// recurring id shows up under the new payer.
 pub fn transfer_recurring_payer(e: &Env, caller: &Address, recurring_id: u32, new_payer: Address) {
     caller.require_auth();
-    new_payer.require_auth();
 
     let mut record: RecurringRecord = e
         .storage()
@@ -262,10 +261,13 @@ pub fn transfer_recurring_payer(e: &Env, caller: &Address, recurring_id: u32, ne
         .expect("recurring not found");
     assert!(record.payer == *caller, "not the payer");
     assert!(record.active, "recurring is not active");
+    // Reject a no-op transfer before authenticating the new payer (the host
+    // rejects double-auth of the same address, so this must be checked first).
     assert!(
         record.payer != new_payer,
         "new payer must differ from current payer"
     );
+    new_payer.require_auth();
 
     // Remove the id from the old payer's index.
     let old_index = DataKey::PayerRecurrings(record.payer.clone());
