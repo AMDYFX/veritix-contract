@@ -21,6 +21,10 @@ for contract upgrades.
 - Inline doc comments explaining the purpose of each test scenario across all test files.
 - Architecture document (`docs/architecture.md`) covering module responsibilities,
   data flow, storage layout, auth model, events, and integration points.
+- `transfer_recurring_payer` — transfer a recurring payment to a new payer with
+  both parties authenticated; the payer index is updated.
+- Test coverage for recurring payer transfer, permit nonce replay protection,
+  storage TTL lifetimes, and dividend/airdrop supply invariants.
 
 ### Changed.
 
