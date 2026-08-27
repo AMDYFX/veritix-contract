@@ -352,3 +352,55 @@ fn test_total_supply_invariant_across_mint_and_burn() {
     client.burn(&user, &400);
     assert_eq!(client.total_supply(), 600);
 }
+
+// ── #687: get_contract_info ───────────────────────────────────────────────────
+
+#[test]
+fn test_get_contract_info_after_initialize() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+
+    let admin = Address::generate(&e);
+    let init_ledger = e.ledger().sequence();
+    client.initialize(&admin);
+
+    let info = client.get_contract_info();
+    assert_eq!(info.admin, admin);
+    assert_eq!(info.version, soroban_sdk::String::from_str(&e, "1.0.0"));
+    assert_eq!(info.is_paused, false);
+    assert_eq!(info.initialized_at_ledger, init_ledger);
+}
+
+#[test]
+fn test_get_contract_info_reflects_pause_state() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    client.set_paused(&admin, &true);
+    let info = client.get_contract_info();
+    assert_eq!(info.is_paused, true);
+}
+
+#[test]
+fn test_get_contract_info_with_max_supply_initialization() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+
+    let admin = Address::generate(&e);
+    let init_ledger = e.ledger().sequence();
+    client.initialize_with_max_supply(&admin, &1_000_000);
+
+    let info = client.get_contract_info();
+    assert_eq!(info.admin, admin);
+    assert_eq!(info.is_paused, false);
+    assert_eq!(info.initialized_at_ledger, init_ledger);
+}

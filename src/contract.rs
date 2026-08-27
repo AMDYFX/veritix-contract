@@ -1,6 +1,6 @@
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Bytes, BytesN, Env, String, Vec};
 use crate::{escrow, multi_escrow, allowance, admin, dispute, recurring, balance, whitelist, permit};
-use crate::storage_types::{DataKey, RecurringPayment, ResolverStats, VestingRecord};
+use crate::storage_types::{DataKey, RecurringPayment, ResolverStats, VestingRecord, ContractInfo};
 use crate::validation::require_positive_amount;
 
 // #573: Airdrop holder set tracking helper
@@ -161,6 +161,7 @@ pub trait VeriTixPayTrait {
     fn get_holders(e: Env) -> Vec<Address>;
     fn set_mediation_fee(e: Env, admin: Address, fee_bps: u32);
     fn version(e: Env) -> soroban_sdk::String;
+    fn get_contract_info(e: Env) -> ContractInfo;
     fn contract_summary(e: Env) -> ContractSummary;
     fn spendable_balance(e: Env, account: Address) -> i128;
     fn set_authorized(e: Env, admin: Address, account: Address, authorized: bool);
@@ -214,6 +215,9 @@ impl VeriTixPayTrait for VeriTixPay {
         }
 
         env.storage().persistent().set(&DataKey::Admin, &admin);
+        env.storage()
+            .persistent()
+            .set(&DataKey::InitializedAtLedger, &env.ledger().sequence());
     }
 
     fn initialize_with_max_supply(env: Env, admin: Address, max_supply: i128) {
@@ -225,6 +229,9 @@ impl VeriTixPayTrait for VeriTixPay {
 
         env.storage().persistent().set(&DataKey::Admin, &admin);
         env.storage().persistent().set(&DataKey::MaxSupply, &max_supply);
+        env.storage()
+            .persistent()
+            .set(&DataKey::InitializedAtLedger, &env.ledger().sequence());
     }
 
     // ── SEP-41 Token Interface ────────────────────────────────────────────────
@@ -676,6 +683,17 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn version(e: Env) -> soroban_sdk::String {
         e.storage().persistent().get(&DataKey::Version).unwrap_or(String::from_str(&e, "1.0.0"))
+    }
+
+    fn get_contract_info(e: Env) -> ContractInfo {
+        let version: soroban_sdk::String =
+            e.storage().persistent().get(&DataKey::Version).unwrap_or(String::from_str(&e, "1.0.0"));
+        let admin: Address = e.storage().persistent().get(&DataKey::Admin).expect("admin not set");
+        let is_paused: bool =
+            e.storage().persistent().get(&DataKey::Paused).unwrap_or(false);
+        let initialized_at_ledger: u32 =
+            e.storage().persistent().get(&DataKey::InitializedAtLedger).unwrap_or(0);
+        ContractInfo { version, admin, is_paused, initialized_at_ledger }
     }
 
     fn contract_summary(e: Env) -> ContractSummary {
