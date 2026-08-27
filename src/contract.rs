@@ -238,6 +238,8 @@ pub trait VeriTixPayTrait {
     fn expire_dispute(e: Env, caller: Address, escrow_id: u32);
     fn pause_recurring(e: Env, caller: Address, recurring_id: u32);
     fn resume_recurring(e: Env, caller: Address, recurring_id: u32);
+    // #735: transfer a recurring payment to a new payer
+    fn transfer_recurring_payer(e: Env, caller: Address, recurring_id: u32, new_payer: Address);
 }
 
 #[contracttype]
@@ -1197,5 +1199,9 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn trigger_auto_release(e: Env, escrow_id: u32) {
         escrow::trigger_auto_release(e, escrow_id)
+    }
+
+    fn transfer_recurring_payer(e: Env, caller: Address, recurring_id: u32, new_payer: Address) {
+        recurring::transfer_recurring_payer(&e, &caller, recurring_id, new_payer)
     }
 }
