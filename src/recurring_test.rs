@@ -193,8 +193,6 @@ fn test_cancel_recurring_removes_from_payer_index() {
 
 #[test]
 fn test_delayed_execute_does_not_drift_schedule() {
-#[test]
-fn test_pause_and_resume_by_payer() {
     use soroban_sdk::{testutils::Address as _, Address};
     let e = Env::default();
     e.mock_all_auths();
@@ -204,30 +202,6 @@ fn test_pause_and_resume_by_payer() {
 
     let payer = Address::generate(&e);
     let payee = Address::generate(&e);
-    let token = e.register_stellar_asset_contract(Address::generate(&e));
-    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &1000);
-
-    let id = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
-
-    client.pause_recurring(&payer, &id);
-    assert!(!client.is_recurring_active(&id));
-
-    client.resume_recurring(&payer, &id);
-    assert!(client.is_recurring_active(&id));
-}
-
-#[test]
-#[should_panic(expected = "unauthorized")]
-fn test_pause_recurring_non_payer_panics() {
-    use soroban_sdk::{testutils::Address as _, Address};
-    let e = Env::default();
-    e.mock_all_auths();
-
-    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
-    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
-
-    let payer = soroban_sdk::Address::generate(&e);
-    let payee = soroban_sdk::Address::generate(&e);
     let token = e.register_stellar_asset_contract(payer.clone());
     soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &100_000_000);
 
@@ -263,6 +237,40 @@ fn test_pause_recurring_non_payer_panics() {
     assert_eq!(record_final.last_charged_ledger, start + 200);
     assert_eq!(record_final.execution_count, 2);
 }
+
+#[test]
+fn test_pause_and_resume_by_payer() {
+    use soroban_sdk::{testutils::Address as _, Address};
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let payer = Address::generate(&e);
+    let payee = Address::generate(&e);
+    let token = e.register_stellar_asset_contract(Address::generate(&e));
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &1000);
+
+    let id = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+
+    client.pause_recurring(&payer, &id);
+    assert!(!client.is_recurring_active(&id));
+
+    client.resume_recurring(&payer, &id);
+    assert!(client.is_recurring_active(&id));
+}
+
+#[test]
+#[should_panic(expected = "unauthorized")]
+fn test_pause_recurring_non_payer_panics() {
+    use soroban_sdk::{testutils::Address as _, Address};
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
     let payer = Address::generate(&e);
     let intruder = Address::generate(&e);
     let payee = Address::generate(&e);
