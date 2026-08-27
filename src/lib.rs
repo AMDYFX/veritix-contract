@@ -18,6 +18,8 @@ mod divi;
 mod dividend_test;
 mod escrow;
 mod escrow_test;
+#[cfg(test)]
+mod event_test;
 mod freeze;
 mod freeze_test;
 mod multi_escrow;

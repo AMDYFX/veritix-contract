@@ -7,7 +7,7 @@
 ![Network: Stellar / Soroban](https://img.shields.io/badge/Network-Stellar%20%2F%20Soroban-7b5ea7.svg)
 ![Status: In Development](https://img.shields.io/badge/Status-In%20Development-yellow.svg)
 
-On-chain payment infrastructure for the Veritix ticketing platform, built with Rust and Soroban on the Stellar network.
+On-chain payment infrastructure for the Veritix ticketing platform, built with Rust and Soroban on the Stellar network..
 
 ---
 

@@ -8,7 +8,7 @@ Whether you are new to Soroban or an experienced Rust developer, there is a plac
 
 ## What is Veritix Pay?
 
-Veritix Pay is the on-chain payment module for the Veritix ticketing platform. It is built in **Rust** using **Soroban**, Stellar's smart contract platform, and deployed on the **Stellar network**..
+Veritix Pay is the on-chain payment module for the Veritix ticketing platform. It is built in **Rust** using **Soroban**, Stellar's smart contract platform, and deployed on the **Stellar network**...
 
 It is responsible for:
 

@@ -51,6 +51,9 @@ pub enum DataKey {
     TotalFeesCollected,
     SplitCount,
     Split(u32),
+    // #773: split distribution protocol fee
+    SplitProtocolFeeBps,
+    SplitProtocolTreasury,
     PayeeRecurrings(Address),
     MediationFeeBps,
     Holders,
@@ -121,4 +124,15 @@ pub struct ContractInfo {
     pub admin: Address,
     pub is_paused: bool,
     pub initialized_at_ledger: u32,
+}
+
+// NOTE: RecurringExecution is a standalone record; the DataKey variants that
+// earlier merged PRs appended as duplicate `enum DataKey` blocks were merged
+// into the single enum above to fix duplicate-definition compile errors.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecurringExecution {
+    pub recurring_id: u32,
+    pub execution_ledger: u32,
+    pub amount: i128,
 }

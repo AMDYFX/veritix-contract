@@ -44,6 +44,19 @@ pub fn is_whitelisted(e: &Env, account: &Address) -> bool {
         .unwrap_or(false)
 }
 
+/// #741: batch add — whitelists up to 50 accounts in a single admin call.
+pub fn add_to_whitelist_batch(e: &Env, admin: &Address, accounts: &Vec<Address>) {
+    crate::admin::check_admin(e, admin);
+    if accounts.len() > 50 {
+        panic!("TooManyAccounts: maximum 50 accounts per batch");
+    }
+    for i in 0..accounts.len() {
+        e.storage()
+            .persistent()
+            .set(&DataKey::Whitelisted(accounts.get(i).unwrap().clone()), &true);
+    }
+}
+
 pub fn check(e: &Env, from: &Address, to: &Address) {
     if is_enabled(e) {
         assert!(is_whitelisted(e, from), "sender not whitelisted");
