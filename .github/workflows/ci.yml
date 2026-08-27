@@ -87,3 +87,31 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Rustfmt
         run: cargo fmt --all --check
+
+name: CI
+
+on:
+  push:
+    branches: [ develop, main ]
+  pull_request:
+    branches: [ develop, main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust & WASM Target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+
+      - name: Build Optimized WASM Contract
+        run: cargo build --target wasm32v1-none --release
+
+      - name: Check WASM Binary Size Limit (100KB)
+        run: |
+          SIZE=$(wc -c < target/wasm32v1-none/release/*.wasm)
+          echo "WASM size: ${SIZE} bytes"
+          [ $SIZE -le 102400 ] || (echo "Error: WASM binary exceeds 100KB limit!" && exit 1)

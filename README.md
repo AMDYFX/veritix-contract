@@ -160,3 +160,10 @@ This project is part of an active open-source funding wave on [Drips Network](ht
 ## License
 
 MIT
+
+## Smart Contract Optimization & Deployment
+
+The Veritix smart contracts are compiled to target `wasm32v1-none` for deployment on the Stellar Soroban network. 
+
+* **Binary Size Limit:** $\le 100\text{ KB}$ (Enforced automatically via CI checks)
+* **Current Baseline Size:** ~64 KB (Optimized release build)
