@@ -1,6 +1,3 @@
-use crate::storage_types::{DataKey, RecurringPayment, ResolverStats, VestingRecord};
-use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Bytes, BytesN, Env, String, Vec};
-use crate::{escrow, multi_escrow, allowance, admin, dispute, recurring, balance, whitelist, permit};
 use crate::storage_types::{DataKey, RecurringPayment, ResolverStats, VestingRecord, ContractInfo};
 use crate::validation::require_positive_amount;
 use crate::{
@@ -781,6 +778,8 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn expire_dispute(e: Env, caller: Address, escrow_id: u32) {
         dispute::expire_dispute(&e, &caller, escrow_id)
+    }
+
     fn pause_recurring(e: Env, caller: Address, recurring_id: u32) {
         recurring::pause_recurring(&e, &caller, recurring_id)
     }
