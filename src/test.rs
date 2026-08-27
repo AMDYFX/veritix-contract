@@ -352,3 +352,42 @@ fn test_total_supply_invariant_across_mint_and_burn() {
     client.burn(&user, &400);
     assert_eq!(client.total_supply(), 600);
 }
+
+// ── #680: Supply invariant across 1000 deterministic transfers ────────────────
+
+#[test]
+fn test_supply_invariant_across_1000_transfers() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    // 1. Mint 1000 to each of 10 addresses (total_supply = 10000).
+    let mut addrs: Vec<Address> = Vec::new(&e);
+    for _ in 0..10 {
+        let addr = Address::generate(&e);
+        client.mint(&admin, &addr, &1000);
+        addrs.push_back(addr);
+    }
+    assert_eq!(client.total_supply(), 10000);
+
+    // 2. Execute 1000 deterministic transfers using modular arithmetic.
+    let memo = Bytes::new(&e);
+    for i in 0..1000u32 {
+        let src = &addrs.get((i % 10) as u32).unwrap();
+        let dst = &addrs.get(((i + 1) % 10) as u32).unwrap();
+        client.transfer_with_memo(src, dst, &1, &memo);
+    }
+
+    // 3. Supply is conserved: transfers must never mint phantom tokens.
+    assert_eq!(client.total_supply(), 10000);
+
+    // 4. Sum of all balances equals the supply.
+    let mut sum: i128 = 0;
+    for i in 0..10u32 {
+        sum += client.balance(&addrs.get(i).unwrap());
+    }
+    assert_eq!(sum, 10000);
+}
