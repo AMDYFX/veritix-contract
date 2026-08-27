@@ -261,6 +261,14 @@ fn test_raise_dispute_by_beneficiary_succeeds() {
     let t = setup();
     soroban_sdk::token::StellarAssetClient::new(&t.e, &t.token).mint(&t.depositor, &10_000_000);
     let expiry = t.e.ledger().sequence() + 1000;
+// ── #695: is_dispute_open ─────────────────────────────────────────────────────
+
+#[test]
+fn test_is_dispute_open_returns_true_when_dispute_is_open() {
+    let t = setup();
+    let expiry = t.e.ledger().sequence() + 1000;
+    soroban_sdk::token::StellarAssetClient::new(&t.e, &t.token).mint(&t.depositor, &10_000_000);
+
     let id = t.client.create_escrow(
         &t.depositor,
         &t.beneficiary,
@@ -414,6 +422,23 @@ fn test_expire_dispute_not_disputed_panics() {
     let t = setup();
     soroban_sdk::token::StellarAssetClient::new(&t.e, &t.token).mint(&t.depositor, &10_000_000);
     let expiry = t.e.ledger().sequence() + 1000;
+        &10_000_000,
+        &expiry,
+        &crate::escrow_test::empty_memo(&t.e),
+    );
+
+    assert!(!t.client.is_dispute_open(&id));
+
+    t.client.raise_dispute(&t.depositor, &id);
+    assert!(t.client.is_dispute_open(&id));
+}
+
+#[test]
+fn test_is_dispute_open_returns_false_after_resolution() {
+    let t = setup();
+    let expiry = t.e.ledger().sequence() + 1000;
+    soroban_sdk::token::StellarAssetClient::new(&t.e, &t.token).mint(&t.depositor, &10_000_000);
+
     let id = t.client.create_escrow(
         &t.depositor,
         &t.beneficiary,
@@ -489,4 +514,21 @@ fn test_dispute_index_isolation_between_claimants() {
         let disputes = crate::dispute::get_disputes_by_claimant(t.e.clone(), other);
         assert_eq!(disputes.len(), 0);
     });
+        &10_000_000,
+        &expiry,
+        &crate::escrow_test::empty_memo(&t.e),
+    );
+
+    t.client.raise_dispute(&t.depositor, &id);
+    assert!(t.client.is_dispute_open(&id));
+
+    t.client.resolve_dispute(&t.arbiter, &id, &t.beneficiary);
+    assert!(!t.client.is_dispute_open(&id));
+}
+
+#[test]
+fn test_is_dispute_open_returns_false_without_dispute() {
+    let t = setup();
+    // Escrow that was never disputed reports false.
+    assert!(!t.client.is_dispute_open(&u32::MAX));
 }

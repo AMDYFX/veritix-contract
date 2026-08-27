@@ -1,4 +1,7 @@
-.PHONY: e2e-test smoke-test integration-test
+.PHONY: build e2e-test smoke-test integration-test
+
+build:
+	$(MAKE) -C veritixpay/contract/token build
 
 e2e-test:
 	@echo "Running end-to-end event lifecycle test..."
