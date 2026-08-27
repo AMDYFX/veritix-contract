@@ -180,6 +180,38 @@ pub fn cancel_recurring(e: &Env, caller: &Address, recurring_id: u32) {
     }
 }
 
+pub fn pause_recurring(e: &Env, caller: &Address, recurring_id: u32) {
+    caller.require_auth();
+    let mut record: RecurringRecord = e
+        .storage()
+        .persistent()
+        .get(&DataKey::Recurring(recurring_id))
+        .expect("recurring not found");
+    // #586: verify the caller is the payer
+    if record.payer != *caller {
+        panic!("unauthorized: only the payer can pause a recurring payment");
+    }
+    assert!(record.active, "recurring is not active");
+    record.active = false;
+    e.storage().persistent().set(&DataKey::Recurring(recurring_id), &record);
+}
+
+pub fn resume_recurring(e: &Env, caller: &Address, recurring_id: u32) {
+    caller.require_auth();
+    let mut record: RecurringRecord = e
+        .storage()
+        .persistent()
+        .get(&DataKey::Recurring(recurring_id))
+        .expect("recurring not found");
+    // #586: verify the caller is the payer
+    if record.payer != *caller {
+        panic!("unauthorized: only the payer can resume a recurring payment");
+    }
+    assert!(!record.active, "recurring is already active");
+    record.active = true;
+    e.storage().persistent().set(&DataKey::Recurring(recurring_id), &record);
+}
+
 pub fn get_recurring_by_payer(e: &Env, payer: &Address) -> Vec<u32> {
     e.storage()
         .persistent()

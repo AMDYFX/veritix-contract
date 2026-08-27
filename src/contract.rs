@@ -192,6 +192,8 @@ pub trait VeriTixPayTrait {
     fn mint_batch(e: Env, admin: Address, mints: Vec<(Address, i128)>) -> i128;
     fn cancel_recurring(e: Env, caller: Address, recurring_id: u32);
     fn get_recurring_by_payer(e: Env, payer: Address) -> Vec<u32>;
+    fn pause_recurring(e: Env, caller: Address, recurring_id: u32);
+    fn resume_recurring(e: Env, caller: Address, recurring_id: u32);
 }
 
 #[contracttype]
@@ -645,6 +647,14 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn get_recurring_by_payer(e: Env, payer: Address) -> Vec<u32> {
         recurring::get_recurring_by_payer(&e, &payer)
+    }
+
+    fn pause_recurring(e: Env, caller: Address, recurring_id: u32) {
+        recurring::pause_recurring(&e, &caller, recurring_id)
+    }
+
+    fn resume_recurring(e: Env, caller: Address, recurring_id: u32) {
+        recurring::resume_recurring(&e, &caller, recurring_id)
     }
 
     fn topup_escrow(e: Env, depositor: Address, escrow_id: u32, amount: i128) {

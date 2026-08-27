@@ -165,3 +165,69 @@ fn test_cancel_recurring_removes_from_payer_index() {
     let list_after = client.get_recurring_by_payer(&payer);
     assert_eq!(list_after.len(), 0);
 }
+
+#[test]
+fn test_pause_and_resume_by_payer() {
+    use soroban_sdk::{testutils::Address as _, Address};
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let payer = Address::generate(&e);
+    let payee = Address::generate(&e);
+    let token = e.register_stellar_asset_contract(Address::generate(&e));
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &1000);
+
+    let id = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+
+    client.pause_recurring(&payer, &id);
+    assert!(!client.is_recurring_active(&id));
+
+    client.resume_recurring(&payer, &id);
+    assert!(client.is_recurring_active(&id));
+}
+
+#[test]
+#[should_panic(expected = "unauthorized")]
+fn test_pause_recurring_non_payer_panics() {
+    use soroban_sdk::{testutils::Address as _, Address};
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let payer = Address::generate(&e);
+    let intruder = Address::generate(&e);
+    let payee = Address::generate(&e);
+    let token = e.register_stellar_asset_contract(Address::generate(&e));
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &1000);
+
+    let id = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+    client.pause_recurring(&intruder, &id);
+}
+
+#[test]
+#[should_panic(expected = "unauthorized")]
+fn test_resume_recurring_non_payer_panics() {
+    use soroban_sdk::{testutils::Address as _, Address};
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let payer = Address::generate(&e);
+    let intruder = Address::generate(&e);
+    let payee = Address::generate(&e);
+    let token = e.register_stellar_asset_contract(Address::generate(&e));
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &1000);
+
+    let id = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+    client.pause_recurring(&payer, &id);
+
+    // A non-payer caller must not be able to resume another payer's recurring payment.
+    client.resume_recurring(&intruder, &id);
+}
