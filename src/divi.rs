@@ -1,7 +1,7 @@
-use soroban_sdk::{token, Env, Address, Vec};
-use crate::storage_types::DataKey;
 use crate::escrow::load_record;
+use crate::storage_types::DataKey;
 use crate::storage_types::ResolverStats;
+use soroban_sdk::{token, Address, Env, Vec};
 
 pub fn set_arbiter(e: &Env, arbiter: &Address) {
     arbiter.require_auth();
@@ -83,7 +83,11 @@ pub fn resolve_dispute(e: &Env, resolver: &Address, escrow_id: u32, winner: &Add
 
         let remaining = record.amount;
         if remaining > 0 {
-            token_client.transfer(&e.current_contract_address(), &record.beneficiary, &remaining);
+            token_client.transfer(
+                &e.current_contract_address(),
+                &record.beneficiary,
+                &remaining,
+            );
         }
     } else {
         record.refunded = true;
@@ -91,7 +95,11 @@ pub fn resolve_dispute(e: &Env, resolver: &Address, escrow_id: u32, winner: &Add
 
         let refundable = record.amount - record.released_amount;
         if refundable > 0 {
-            token_client.transfer(&e.current_contract_address(), &record.depositor, &refundable);
+            token_client.transfer(
+                &e.current_contract_address(),
+                &record.depositor,
+                &refundable,
+            );
         }
     }
 
@@ -143,9 +151,6 @@ pub fn get_resolver_stats(e: &Env, resolver: &Address) -> ResolverStats {
         })
 }
 
-
-
-
 pub fn get_disputes_by_claimant(e: Env, claimant: Address) -> Vec<u32> {
     e.storage()
         .persistent()
@@ -156,12 +161,18 @@ pub fn get_disputes_by_claimant(e: Env, claimant: Address) -> Vec<u32> {
 pub fn distribute_dividend(e: &Env, admin: &Address, total_dividend: i128, holders: Vec<Address>) {
     crate::admin::check_admin(e, admin);
     assert!(total_dividend > 0, "total_dividend must be positive");
-    if holders.is_empty() { return; }
+    if holders.is_empty() {
+        return;
+    }
     let per_holder = total_dividend / holders.len() as i128;
     let remainder = total_dividend % holders.len() as i128;
     for i in 0..holders.len() {
         let h = holders.get(i).unwrap();
-        let amount = if i == 0 { per_holder + remainder } else { per_holder };
+        let amount = if i == 0 {
+            per_holder + remainder
+        } else {
+            per_holder
+        };
         crate::balance::add_balance(e, &h, amount);
     }
 }

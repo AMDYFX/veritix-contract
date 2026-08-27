@@ -1,7 +1,10 @@
 #![cfg(test)]
 
-use soroban_sdk::{testutils::Address as _, testutils::Events as _, testutils::Ledger as _, Address, Bytes, Env};
 use crate::contract::{VeriTixPay, VeriTixPayClient};
+use soroban_sdk::{
+    testutils::Address as _, testutils::Events as _, testutils::Ledger as _, Address, Bytes, Env,
+    Vec,
+};
 
 // ── Test setup ────────────────────────────────────────────────────────────────
 
@@ -26,7 +29,13 @@ fn setup() -> TestEnv<'static> {
 
     soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&depositor, &50_000);
 
-    TestEnv { e, client, depositor, beneficiary, token }
+    TestEnv {
+        e,
+        client,
+        depositor,
+        beneficiary,
+        token,
+    }
 }
 
 pub(crate) fn empty_memo(e: &Env) -> Bytes {
@@ -45,7 +54,12 @@ fn test_create_indexes_both_parties() {
     let expiry = t.e.ledger().sequence() + 1000;
 
     let id = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &1_000, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &1_000,
+        &expiry,
+        &empty_memo(&t.e),
     );
 
     let by_dep = t.client.get_escrows_by_depositor(&t.depositor);
@@ -65,13 +79,23 @@ fn test_escrowed_total_tracks_active_amounts() {
     assert_eq!(t.client.escrowed_total(), 0);
 
     let first = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &1_000, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &1_000,
+        &expiry,
+        &empty_memo(&t.e),
     );
     assert_eq!(first, 0);
     assert_eq!(t.client.escrowed_total(), 1_000);
 
     let second = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &500, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &500,
+        &expiry,
+        &empty_memo(&t.e),
     );
     assert_eq!(second, 1);
     assert_eq!(t.client.escrowed_total(), 1_500);
@@ -94,14 +118,24 @@ fn test_escrow_stats_returns_correct_total_value_locked() {
 
     // Create first escrow
     let first = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &1_000, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &1_000,
+        &expiry,
+        &empty_memo(&t.e),
     );
     let stats_after_first = t.client.escrow_stats();
     assert_eq!(stats_after_first.total_value_locked, 1_000);
 
     // Create second escrow
     let second = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &500, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &500,
+        &expiry,
+        &empty_memo(&t.e),
     );
     let stats_after_second = t.client.escrow_stats();
     assert_eq!(stats_after_second.total_value_locked, 1_500);
@@ -124,20 +158,28 @@ fn test_partial_release_updates_total_locked_correctly() {
 
     // Create an escrow with 1000 tokens
     let escrow_id = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &1_000, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &1_000,
+        &expiry,
+        &empty_memo(&t.e),
     );
     assert_eq!(t.client.escrow_stats().total_value_locked, 1000);
 
     // Partially release 300 tokens
-    t.client.release_partial_escrow(&t.beneficiary, &escrow_id, &300);
+    t.client
+        .release_partial_escrow(&t.beneficiary, &escrow_id, &300);
     assert_eq!(t.client.escrow_stats().total_value_locked, 700);
 
     // Partially release another 400 tokens
-    t.client.release_partial_escrow(&t.beneficiary, &escrow_id, &400);
+    t.client
+        .release_partial_escrow(&t.beneficiary, &escrow_id, &400);
     assert_eq!(t.client.escrow_stats().total_value_locked, 300);
 
     // Release the remaining 300 tokens
-    t.client.release_partial_escrow(&t.beneficiary, &escrow_id, &300);
+    t.client
+        .release_partial_escrow(&t.beneficiary, &escrow_id, &300);
     assert_eq!(t.client.escrow_stats().total_value_locked, 0);
 }
 
@@ -148,7 +190,12 @@ fn test_beneficiary_index_accumulates() {
 
     for amount in [100, 200, 300] {
         t.client.create_escrow(
-            &t.depositor, &t.beneficiary, &t.token, &amount, &expiry, &empty_memo(&t.e),
+            &t.depositor,
+            &t.beneficiary,
+            &t.token,
+            &amount,
+            &expiry,
+            &empty_memo(&t.e),
         );
     }
 
@@ -174,9 +221,9 @@ fn test_memo_stored_and_readable() {
     // get_escrow helper (add that to contract.rs if not present) or
     // verify indirectly through the index length — for a standalone test
     // the panic-free path is sufficient.
-    let id = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &500, &expiry, &memo,
-    );
+    let id = t
+        .client
+        .create_escrow(&t.depositor, &t.beneficiary, &t.token, &500, &expiry, &memo);
 
     // index should contain this escrow — proves creation succeeded with memo
     let list = t.client.get_escrows_by_depositor(&t.depositor);
@@ -190,7 +237,12 @@ fn test_empty_memo_is_valid() {
 
     // should not panic
     t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &100, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &100,
+        &expiry,
+        &empty_memo(&t.e),
     );
 }
 
@@ -200,9 +252,8 @@ fn test_exactly_64_byte_memo_is_valid() {
     let expiry = t.e.ledger().sequence() + 1000;
     let memo = make_memo(&t.e, &[b'x'; 64]);
 
-    t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &100, &expiry, &memo,
-    );
+    t.client
+        .create_escrow(&t.depositor, &t.beneficiary, &t.token, &100, &expiry, &memo);
 }
 
 #[test]
@@ -225,9 +276,8 @@ fn test_create_escrow_oversized_memo_panics() {
     let t = setup();
     let expiry = t.e.ledger().sequence() + 1000;
     let memo = make_memo(&t.e, &[0u8; 65]);
-    t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &100, &expiry, &memo,
-    );
+    t.client
+        .create_escrow(&t.depositor, &t.beneficiary, &t.token, &100, &expiry, &memo);
 }
 
 // ── #174: Partial release ─────────────────────────────────────────────────────
@@ -238,7 +288,12 @@ fn test_partial_release_reduces_remaining() {
     let expiry = t.e.ledger().sequence() + 1000;
 
     let id = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &1_000, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &1_000,
+        &expiry,
+        &empty_memo(&t.e),
     );
 
     t.client.release_partial_escrow(&t.beneficiary, &id, &300);
@@ -254,7 +309,12 @@ fn test_multiple_partial_releases() {
     let expiry = t.e.ledger().sequence() + 1000;
 
     let id = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &900, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &900,
+        &expiry,
+        &empty_memo(&t.e),
     );
 
     t.client.release_partial_escrow(&t.beneficiary, &id, &300);
@@ -271,7 +331,12 @@ fn test_full_partial_release_marks_as_released() {
     let expiry = t.e.ledger().sequence() + 1000;
 
     let id = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &1_000, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &1_000,
+        &expiry,
+        &empty_memo(&t.e),
     );
 
     t.client.release_partial_escrow(&t.beneficiary, &id, &1_000);
@@ -289,7 +354,12 @@ fn test_over_release_validation() {
     let expiry = t.e.ledger().sequence() + 1000;
 
     let id = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &500, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &500,
+        &expiry,
+        &empty_memo(&t.e),
     );
 
     let escrow = t.client.get_escrow(&id);
@@ -302,7 +372,12 @@ fn test_over_release_after_partial_validation() {
     let expiry = t.e.ledger().sequence() + 1000;
 
     let id = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &500, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &500,
+        &expiry,
+        &empty_memo(&t.e),
     );
 
     t.client.release_partial_escrow(&t.beneficiary, &id, &400);
@@ -316,7 +391,12 @@ fn test_zero_partial_release_validation() {
     let expiry = t.e.ledger().sequence() + 1000;
 
     let id = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &500, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &500,
+        &expiry,
+        &empty_memo(&t.e),
     );
 
     let escrow = t.client.get_escrow(&id);
@@ -329,7 +409,12 @@ fn test_beneficiary_can_partial_release() {
     let expiry = t.e.ledger().sequence() + 1000;
 
     let id = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &500, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &500,
+        &expiry,
+        &empty_memo(&t.e),
     );
 
     t.client.release_partial_escrow(&t.beneficiary, &id, &100);
@@ -343,7 +428,12 @@ fn test_refund_after_partial_release_returns_remainder() {
     let expiry = t.e.ledger().sequence() + 1000;
 
     let id = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &1_000, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &1_000,
+        &expiry,
+        &empty_memo(&t.e),
     );
 
     // Beneficiary takes 400 first
@@ -380,7 +470,10 @@ fn test_create_escrow_event_includes_memo() {
 
     // Verify events were emitted
     let events = t.e.events().all();
-    assert!(!events.events().is_empty(), "escrow_created event should be emitted");
+    assert!(
+        !events.events().is_empty(),
+        "escrow_created event should be emitted"
+    );
 }
 
 #[test]
@@ -403,7 +496,10 @@ fn test_release_escrow_event_includes_memo() {
 
     // Verify events were emitted including release event
     let events = t.e.events().all();
-    assert!(events.events().len() >= 2, "escrow_created and escrow_released events should be emitted");
+    assert!(
+        events.events().len() >= 2,
+        "escrow_created and escrow_released events should be emitted"
+    );
 }
 
 #[test]
@@ -426,7 +522,10 @@ fn test_refund_escrow_event_includes_memo() {
 
     // Verify events were emitted including refund event
     let events = t.e.events().all();
-    assert!(events.events().len() >= 2, "escrow_created and escrow_refunded events should be emitted");
+    assert!(
+        events.events().len() >= 2,
+        "escrow_created and escrow_refunded events should be emitted"
+    );
 }
 
 #[test]
@@ -446,19 +545,23 @@ fn test_create_escrow_event_with_empty_memo() {
 
     // Even with empty memo event should be emitted
     let events = t.e.events().all();
-    assert!(!events.events().is_empty(), "escrow_created event should be emitted even with empty memo");
+    assert!(
+        !events.events().is_empty(),
+        "escrow_created event should be emitted even with empty memo"
+    );
 
     let list = t.client.get_escrows_by_depositor(&t.depositor);
     assert_eq!(list.get(0).unwrap(), id);
 }
 
-
-
 #[cfg(test)]
 mod lien_tests {
-    use soroban_sdk::{testutils::{Address as _, Ledger}, Address, Bytes, Env};
     use crate::contract::{VeriTixPay, VeriTixPayClient};
     use crate::test::create_token_contract;
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger},
+        Address, Bytes, Env,
+    };
 
     #[test]
     fn test_lien_mechanics() {
@@ -473,22 +576,22 @@ mod lien_tests {
 
         let contract_id = e.register_contract(None, VeriTixPay);
         let client = VeriTixPayClient::new(&e, &contract_id);
-        
+
         let token = create_token_contract(&e, &admin);
         let token_admin_client = soroban_sdk::token::StellarAssetClient::new(&e, &token);
         let token_client = soroban_sdk::token::Client::new(&e, &token);
-        
+
         token_admin_client.mint(&depositor, &2000);
-        
+
         let memo = Bytes::from_slice(&e, b"test lien");
         let escrow_id = client.create_escrow(&depositor, &beneficiary, &token, &1000, &200, &memo);
-        
+
         // Place a lien
         client.place_lien(&creditor, &escrow_id, &300);
-        
+
         // Release the escrow, should send 300 to creditor and 700 to beneficiary
         client.release_escrow(&depositor, &escrow_id);
-        
+
         assert_eq!(token_client.balance(&creditor), 300);
         assert_eq!(token_client.balance(&beneficiary), 700);
     }
@@ -501,8 +604,22 @@ fn test_get_escrows_batch() {
     let t = setup();
     let expiry = t.e.ledger().sequence() + 1000;
 
-    let id1 = t.client.create_escrow(&t.depositor, &t.beneficiary, &t.token, &100, &expiry, &empty_memo(&t.e));
-    let id2 = t.client.create_escrow(&t.depositor, &t.beneficiary, &t.token, &200, &expiry, &empty_memo(&t.e));
+    let id1 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &100,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    let id2 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &200,
+        &expiry,
+        &empty_memo(&t.e),
+    );
 
     let ids = soroban_sdk::vec![&t.e, id1, id2, 999];
     let batch = t.client.get_escrows_batch(&ids);
@@ -531,7 +648,10 @@ fn test_create_escrow_at_min_amount_succeeds() {
         &empty_memo(&t.e),
     );
     assert_eq!(id, 0);
-    assert_eq!(t.client.escrowed_total(), crate::storage_types::MIN_ESCROW_AMOUNT);
+    assert_eq!(
+        t.client.escrowed_total(),
+        crate::storage_types::MIN_ESCROW_AMOUNT
+    );
 }
 
 #[test]
@@ -560,7 +680,12 @@ fn test_is_escrow_settled() {
 
     // Create a new escrow - should not be settled yet
     let id = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &1000, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &1000,
+        &expiry,
+        &empty_memo(&t.e),
     );
     assert!(!t.client.is_escrow_settled(&id));
 
@@ -570,7 +695,12 @@ fn test_is_escrow_settled() {
 
     // Create another escrow, refund it - should be settled
     let id2 = t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &500, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &500,
+        &expiry,
+        &empty_memo(&t.e),
     );
     assert!(!t.client.is_escrow_settled(&id2));
     t.client.refund_escrow(&t.depositor, &id2);
@@ -583,11 +713,19 @@ fn test_get_escrow_age() {
     let start_ledger = t.e.ledger().sequence();
     let expiry = start_ledger + 1000;
 
-    let id = t.client.create_escrow(&t.depositor, &t.beneficiary, &t.token, &100, &expiry, &empty_memo(&t.e));
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &100,
+        &expiry,
+        &empty_memo(&t.e),
+    );
 
     assert_eq!(t.client.get_escrow_age(&id), 0);
 
-    t.e.ledger().with_mut(|l| l.sequence_number = start_ledger + 5);
+    t.e.ledger()
+        .with_mut(|l| l.sequence_number = start_ledger + 5);
     assert_eq!(t.client.get_escrow_age(&id), 5);
 
     t.client.release_escrow(&t.depositor, &id);
@@ -603,7 +741,12 @@ fn test_max_escrows_per_depositor_succeeds_at_limit() {
 
     for _ in 0..100 {
         t.client.create_escrow(
-            &t.depositor, &t.beneficiary, &t.token, &1, &expiry, &empty_memo(&t.e),
+            &t.depositor,
+            &t.beneficiary,
+            &t.token,
+            &1,
+            &expiry,
+            &empty_memo(&t.e),
         );
     }
 
@@ -619,13 +762,23 @@ fn test_max_escrows_per_depositor_panics_at_101() {
 
     for _ in 0..100 {
         t.client.create_escrow(
-            &t.depositor, &t.beneficiary, &t.token, &1, &expiry, &empty_memo(&t.e),
+            &t.depositor,
+            &t.beneficiary,
+            &t.token,
+            &1,
+            &expiry,
+            &empty_memo(&t.e),
         );
     }
 
     // The 101st escrow must panic
     t.client.create_escrow(
-        &t.depositor, &t.beneficiary, &t.token, &1, &expiry, &empty_memo(&t.e),
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &1,
+        &expiry,
+        &empty_memo(&t.e),
     );
 }
 
@@ -641,29 +794,491 @@ fn test_escrowed_value_for_depositor_zero_for_new_address() {
 #[test]
 fn test_escrowed_value_for_depositor_correct_sum() {
     let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 3);
     let expiry = t.e.ledger().sequence() + 1000;
 
-    t.client.create_escrow(&t.depositor, &t.beneficiary, &t.token, &1_000, &expiry, &empty_memo(&t.e));
-    t.client.create_escrow(&t.depositor, &t.beneficiary, &t.token, &500, &expiry, &empty_memo(&t.e));
+    t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &(crate::storage_types::MIN_ESCROW_AMOUNT * 2),
+        &expiry,
+        &empty_memo(&t.e),
+    );
 
-    assert_eq!(t.client.escrowed_value_for_depositor(&t.depositor), 1_500);
+    assert_eq!(
+        t.client.escrowed_value_for_depositor(&t.depositor),
+        crate::storage_types::MIN_ESCROW_AMOUNT * 3
+    );
 }
 
 #[test]
 fn test_escrowed_value_for_depositor_excludes_settled() {
     let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 3);
     let expiry = t.e.ledger().sequence() + 1000;
 
-    let id1 = t.client.create_escrow(&t.depositor, &t.beneficiary, &t.token, &1_000, &expiry, &empty_memo(&t.e));
-    let id2 = t.client.create_escrow(&t.depositor, &t.beneficiary, &t.token, &500, &expiry, &empty_memo(&t.e));
+    let id1 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    let id2 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &(crate::storage_types::MIN_ESCROW_AMOUNT * 2),
+        &expiry,
+        &empty_memo(&t.e),
+    );
 
-    assert_eq!(t.client.escrowed_value_for_depositor(&t.depositor), 1_500);
+    assert_eq!(
+        t.client.escrowed_value_for_depositor(&t.depositor),
+        crate::storage_types::MIN_ESCROW_AMOUNT * 3
+    );
 
     // Release first escrow
     t.client.release_escrow(&t.depositor, &id1);
-    assert_eq!(t.client.escrowed_value_for_depositor(&t.depositor), 500);
+    assert_eq!(
+        t.client.escrowed_value_for_depositor(&t.depositor),
+        crate::storage_types::MIN_ESCROW_AMOUNT * 2
+    );
 
     // Refund second escrow
     t.client.refund_escrow(&t.depositor, &id2);
     assert_eq!(t.client.escrowed_value_for_depositor(&t.depositor), 0);
+}
+// ── Section A: amberly-d's issues ──────────────────────────────────────────────
+
+fn mint_more(t: &TestEnv<'_>, amount: i128) {
+    soroban_sdk::token::StellarAssetClient::new(&t.e, &t.token).mint(&t.depositor, &amount);
+}
+
+#[test]
+#[should_panic(expected = "cannot refund active dispute")]
+fn test_refund_blocked_when_open_dispute_exists() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 2);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    t.client.raise_dispute(&t.depositor, &id);
+    t.client.refund_escrow(&t.depositor, &id);
+}
+
+#[test]
+#[should_panic(expected = "admin not set")]
+fn test_release_blocked_when_open_dispute_exists() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 2);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    t.client.raise_dispute(&t.beneficiary, &id);
+    t.client.release_escrow(&t.beneficiary, &id);
+}
+
+#[test]
+fn test_refund_succeeds_after_dispute_is_resolved() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 2);
+    let arbiter = Address::generate(&t.e);
+    t.client.set_arbiter(&arbiter);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    t.client.raise_dispute(&t.depositor, &id);
+    t.client.resolve_dispute(&arbiter, &id, &t.depositor);
+
+    let record = t.client.get_escrow(&id);
+    assert!(record.refunded);
+    let tc = soroban_sdk::token::Client::new(&t.e, &t.token);
+    assert_eq!(
+        tc.balance(&t.depositor),
+        50_000 + crate::storage_types::MIN_ESCROW_AMOUNT * 2
+    );
+}
+
+#[test]
+fn test_topup_escrow_increases_amount() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 3);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    let before = t.client.get_escrow(&id).amount;
+    t.client
+        .topup_escrow(&t.depositor, &id, &crate::storage_types::MIN_ESCROW_AMOUNT);
+    assert_eq!(
+        before + crate::storage_types::MIN_ESCROW_AMOUNT,
+        t.client.get_escrow(&id).amount
+    );
+}
+
+#[test]
+#[should_panic(expected = "escrow already settled")]
+fn test_topup_escrow_settled_panics() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 3);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    t.client.release_escrow(&t.depositor, &id);
+    t.client
+        .topup_escrow(&t.depositor, &id, &crate::storage_types::MIN_ESCROW_AMOUNT);
+}
+
+#[test]
+#[should_panic(expected = "DisputeOpen")]
+fn test_topup_escrow_with_open_dispute_panics() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 3);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    t.client.raise_dispute(&t.depositor, &id);
+    t.client
+        .topup_escrow(&t.depositor, &id, &crate::storage_types::MIN_ESCROW_AMOUNT);
+}
+
+#[test]
+#[should_panic(expected = "amount must be positive")]
+fn test_topup_escrow_zero_amount_panics() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 2);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    t.client.topup_escrow(&t.depositor, &id, &0);
+}
+
+#[test]
+fn test_escrow_between_returns_id_when_active_match_exists() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 2);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    assert_eq!(t.client.escrow_between(&t.depositor, &t.beneficiary), id);
+}
+
+#[test]
+#[should_panic(expected = "no escrow found between the two addresses")]
+fn test_escrow_between_returns_none_when_no_match() {
+    let t = setup();
+    let a = Address::generate(&t.e);
+    let b = Address::generate(&t.e);
+    t.client.escrow_between(&a, &b);
+}
+
+#[test]
+fn test_escrowed_value_for_depositor_sums_active_escrows() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 4);
+    let expiry = t.e.ledger().sequence() + 1000;
+    t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &(crate::storage_types::MIN_ESCROW_AMOUNT * 2),
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    assert_eq!(
+        t.client.escrowed_value_for_depositor(&t.depositor),
+        crate::storage_types::MIN_ESCROW_AMOUNT * 3
+    );
+}
+
+#[test]
+fn test_escrowed_value_for_depositor_excludes_settled_v2() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 4);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id1 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    let id2 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &(crate::storage_types::MIN_ESCROW_AMOUNT * 2),
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    t.client.release_escrow(&t.depositor, &id1);
+    assert_eq!(
+        t.client.escrowed_value_for_depositor(&t.depositor),
+        crate::storage_types::MIN_ESCROW_AMOUNT * 2
+    );
+    t.client.refund_escrow(&t.depositor, &id2);
+    assert_eq!(t.client.escrowed_value_for_depositor(&t.depositor), 0);
+}
+
+#[test]
+fn test_escrowed_value_for_depositor_returns_zero_with_no_escrows() {
+    let t = setup();
+    assert_eq!(t.client.escrowed_value_for_depositor(&t.depositor), 0);
+}
+
+// ── #666: admin_settle_escrow ─────────────────────────────────────────────────
+
+#[test]
+fn test_admin_settle_escrow_to_beneficiary() {
+    let t = setup();
+    let admin = Address::generate(&t.e);
+    t.client.initialize(&admin);
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 2);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    t.client.admin_settle_escrow(&admin, &id, &t.beneficiary);
+    let record = t.client.get_escrow(&id);
+    assert!(record.released);
+    let tc = soroban_sdk::token::Client::new(&t.e, &t.token);
+    assert_eq!(
+        tc.balance(&t.beneficiary),
+        crate::storage_types::MIN_ESCROW_AMOUNT
+    );
+}
+
+#[test]
+fn test_admin_settle_escrow_to_depositor() {
+    let t = setup();
+    let admin = Address::generate(&t.e);
+    t.client.initialize(&admin);
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 2);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    t.client.admin_settle_escrow(&admin, &id, &t.depositor);
+    let record = t.client.get_escrow(&id);
+    assert!(record.refunded);
+    assert_eq!(t.client.escrowed_total(), 0);
+}
+
+#[test]
+#[should_panic(expected = "winner must be depositor or beneficiary")]
+fn test_admin_settle_escrow_invalid_winner_panics() {
+    let t = setup();
+    let admin = Address::generate(&t.e);
+    t.client.initialize(&admin);
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 2);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    let stranger = Address::generate(&t.e);
+    t.client.admin_settle_escrow(&admin, &id, &stranger);
+}
+
+#[test]
+#[should_panic(expected = "escrow already settled")]
+fn test_admin_settle_escrow_settled_panics() {
+    let t = setup();
+    let admin = Address::generate(&t.e);
+    t.client.initialize(&admin);
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 2);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    t.client.release_escrow(&t.depositor, &id);
+    t.client.admin_settle_escrow(&admin, &id, &t.beneficiary);
+}
+
+// ── Section B: northersubair's issue #668 ──────────────────────────────────────
+
+#[test]
+fn test_100_escrows_sequential_ids() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 100);
+    let expiry = t.e.ledger().sequence() + 1000;
+    for i in 0..100u32 {
+        let id = t.client.create_escrow(
+            &t.depositor,
+            &t.beneficiary,
+            &t.token,
+            &crate::storage_types::MIN_ESCROW_AMOUNT,
+            &expiry,
+            &empty_memo(&t.e),
+        );
+        assert_eq!(id, i);
+    }
+}
+
+#[test]
+fn test_100_escrows_all_released_contract_balance_zero() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 100);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let mut ids = Vec::new(&t.e);
+    for _ in 0..100 {
+        let id = t.client.create_escrow(
+            &t.depositor,
+            &t.beneficiary,
+            &t.token,
+            &crate::storage_types::MIN_ESCROW_AMOUNT,
+            &expiry,
+            &empty_memo(&t.e),
+        );
+        ids.push_back(id);
+    }
+    for i in 0..ids.len() {
+        t.client.release_escrow(&t.depositor, &ids.get(i).unwrap());
+    }
+    assert_eq!(t.client.escrowed_total(), 0);
+    let tc = soroban_sdk::token::Client::new(&t.e, &t.token);
+    assert_eq!(tc.balance(&t.client.address), 0);
+}
+
+#[test]
+fn test_two_escrows_release_one_other_unaffected() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 4);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id1 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    let id2 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &(crate::storage_types::MIN_ESCROW_AMOUNT * 2),
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    t.client.release_escrow(&t.depositor, &id1);
+    let record2 = t.client.get_escrow(&id2);
+    assert!(!record2.released && !record2.refunded);
+    t.client.refund_escrow(&t.depositor, &id2);
+    assert!(t.client.get_escrow(&id2).refunded);
+}
+
+#[test]
+fn test_dispute_on_one_escrow_does_not_affect_others() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 4);
+    let arbiter = Address::generate(&t.e);
+    t.client.set_arbiter(&arbiter);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let id1 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    let id2 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &(crate::storage_types::MIN_ESCROW_AMOUNT * 2),
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    t.client.raise_dispute(&t.depositor, &id1);
+    t.client.release_escrow(&t.depositor, &id2);
+    assert!(t.client.get_escrow(&id2).released);
+    assert!(!t.client.get_escrow(&id1).released);
 }
