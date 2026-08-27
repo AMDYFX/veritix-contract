@@ -238,6 +238,19 @@ pub trait VeriTixPayTrait {
     fn expire_dispute(e: Env, caller: Address, escrow_id: u32);
     fn pause_recurring(e: Env, caller: Address, recurring_id: u32);
     fn resume_recurring(e: Env, caller: Address, recurring_id: u32);
+    // #749: recurring execution window
+    fn set_recurring_execution_window(e: Env, admin: Address, window_ledgers: u32);
+    // #743: timed freeze
+    fn freeze_until(e: Env, admin: Address, account: Address, until_ledger: u32);
+    // #748: signed bulk whitelist
+    fn add_to_whitelist_signed(
+        e: Env,
+        admin: Address,
+        addresses: Vec<Address>,
+        nonce: u64,
+        public_key: BytesN<32>,
+        signature: BytesN<64>,
+    );
 }
 
 #[contracttype]
@@ -1197,5 +1210,24 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn trigger_auto_release(e: Env, escrow_id: u32) {
         escrow::trigger_auto_release(e, escrow_id)
+    }
+
+    fn set_recurring_execution_window(e: Env, admin: Address, window_ledgers: u32) {
+        recurring::set_recurring_execution_window(&e, &admin, window_ledgers)
+    }
+
+    fn freeze_until(e: Env, admin: Address, account: Address, until_ledger: u32) {
+        crate::freeze::freeze_until(&e, &admin, &account, until_ledger)
+    }
+
+    fn add_to_whitelist_signed(
+        e: Env,
+        admin: Address,
+        addresses: Vec<Address>,
+        nonce: u64,
+        public_key: BytesN<32>,
+        signature: BytesN<64>,
+    ) {
+        whitelist::add_to_whitelist_signed(&e, &admin, &addresses, nonce, &public_key, &signature)
     }
 }

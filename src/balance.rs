@@ -52,6 +52,21 @@ pub fn spendable_balance(e: &Env, account: &Address) -> i128 {
 }
 
 pub fn is_frozen(e: &Env, account: &Address) -> bool {
+    // #743: a timed freeze (freeze_until) auto-clears once the current ledger
+    // passes until_ledger, and blocks spending in the meantime.
+    if let Some(until) = e
+        .storage()
+        .persistent()
+        .get::<_, u32>(&DataKey::FrozenUntil(account.clone()))
+    {
+        if e.ledger().sequence() >= until {
+            e.storage()
+                .persistent()
+                .remove(&DataKey::FrozenUntil(account.clone()));
+            return false;
+        }
+        return true;
+    }
     e.storage()
         .persistent()
         .get(&DataKey::Frozen(account.clone()))
