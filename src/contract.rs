@@ -74,6 +74,7 @@ pub trait VeriTixPayTrait {
     fn set_arbiter(e: Env, arbiter: Address);
     fn raise_dispute(e: Env, caller: Address, escrow_id: u32);
     fn resolve_dispute(e: Env, resolver: Address, escrow_id: u32, winner: Address);
+    fn is_dispute_open(e: Env, escrow_id: u32) -> bool;
 
     // ── Recurring Payments ────────────────────────────────────────────────────
     fn setup_recurring(
@@ -363,6 +364,12 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn resolve_dispute(e: Env, resolver: Address, escrow_id: u32, winner: Address) {
         dispute::resolve_dispute(&e, &resolver, escrow_id, &winner)
+    }
+
+    fn is_dispute_open(e: Env, escrow_id: u32) -> bool {
+        e.storage()
+            .persistent()
+            .has(&DataKey::EscrowDispute(escrow_id))
     }
 
     fn setup_recurring(

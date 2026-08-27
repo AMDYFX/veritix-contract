@@ -173,3 +173,55 @@ fn test_open_dispute_unauthorized_party_panics() {
         crate::dispute::open_dispute(t.e.clone(), stranger, id, 1);
     });
 }
+
+// ── #695: is_dispute_open ─────────────────────────────────────────────────────
+
+#[test]
+fn test_is_dispute_open_returns_true_when_dispute_is_open() {
+    let t = setup();
+    let expiry = t.e.ledger().sequence() + 1000;
+    soroban_sdk::token::StellarAssetClient::new(&t.e, &t.token).mint(&t.depositor, &10_000_000);
+
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &10_000_000,
+        &expiry,
+        &crate::escrow_test::empty_memo(&t.e),
+    );
+
+    assert!(!t.client.is_dispute_open(&id));
+
+    t.client.raise_dispute(&t.depositor, &id);
+    assert!(t.client.is_dispute_open(&id));
+}
+
+#[test]
+fn test_is_dispute_open_returns_false_after_resolution() {
+    let t = setup();
+    let expiry = t.e.ledger().sequence() + 1000;
+    soroban_sdk::token::StellarAssetClient::new(&t.e, &t.token).mint(&t.depositor, &10_000_000);
+
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &10_000_000,
+        &expiry,
+        &crate::escrow_test::empty_memo(&t.e),
+    );
+
+    t.client.raise_dispute(&t.depositor, &id);
+    assert!(t.client.is_dispute_open(&id));
+
+    t.client.resolve_dispute(&t.arbiter, &id, &t.beneficiary);
+    assert!(!t.client.is_dispute_open(&id));
+}
+
+#[test]
+fn test_is_dispute_open_returns_false_without_dispute() {
+    let t = setup();
+    // Escrow that was never disputed reports false.
+    assert!(!t.client.is_dispute_open(&u32::MAX));
+}
