@@ -115,3 +115,30 @@ jobs:
           SIZE=$(wc -c < target/wasm32v1-none/release/*.wasm)
           echo "WASM size: ${SIZE} bytes"
           [ $SIZE -le 102400 ] || (echo "Error: WASM binary exceeds 100KB limit!" && exit 1)
+
+name: CI
+
+on:
+  push:
+    branches: [ develop, main ]
+  pull_request:
+    branches: [ develop, main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run Cargo Test
+        run: cargo test --all-features
+
+      - name: Install Cargo Tarpaulin
+        run: cargo install cargo-tarpaulin
+
+      - name: Generate Code Coverage Report & Enforce 80% Threshold
+        run: |
+          cargo tarpaulin --out Xml --all-features --ignore-tests --fail-under 80

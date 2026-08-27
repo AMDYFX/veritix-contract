@@ -167,3 +167,14 @@ The Veritix smart contracts are compiled to target `wasm32v1-none` for deploymen
 
 * **Binary Size Limit:** $\le 100\text{ KB}$ (Enforced automatically via CI checks)
 * **Current Baseline Size:** ~64 KB (Optimized release build)
+
+# Veritix Smart Contracts
+
+[![CI Status](https://github.com/Lead-Studios/veritix-contract/actions/workflows/ci.yml/badge.svg)](https://github.com/Lead-Studios/veritix-contract/actions/workflows/ci.yml)
+[![Coverage Status](https://codecov.io/gh/Lead-Studios/veritix-contract/branch/develop/graph/badge.svg)](https://codecov.io/gh/Lead-Studios/veritix-contract)
+
+## Testing & Code Coverage
+
+Test coverage is continuously monitored using `cargo tarpaulin`. 
+
+* **Minimum Coverage Threshold:** $80\%$ (Enforced strictly via CI pipeline)
