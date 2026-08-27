@@ -1,4 +1,4 @@
-use crate::storage_types::{DataKey, RecurringPayment};
+use crate::storage_types::{DataKey, RecurringExecution, RecurringPayment};
 use soroban_sdk::{contracttype, token, Address, Env, Vec};
 
 #[contracttype]
@@ -274,9 +274,6 @@ pub fn get_recurring_by_payer(e: &Env, payer: &Address) -> Vec<u32> {
         .unwrap_or(Vec::new(e))
 }
 
-use soroban_sdk::{Env, Vec};
-use crate::storage_types::{DataKey, RecurringExecution};
-
 pub fn record_execution(e: &Env, recurring_id: u32, amount: i128) {
     let ledger = e.ledger().sequence();
     let execution = RecurringExecution {
@@ -295,9 +292,6 @@ pub fn record_execution(e: &Env, recurring_id: u32, amount: i128) {
     history.push_back(execution);
     e.storage().instance().set(&key, &history);
 }
-
-use soroban_sdk::{Address, Env, Vec};
-use crate::storage_types::DataKey;
 
 pub fn index_recurring_for_payee(e: &Env, payee: &Address, recurring_id: u32) {
     let key = DataKey::PayeeRecurrings(payee.clone());

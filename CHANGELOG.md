@@ -16,6 +16,10 @@ for contract upgrades.
 
 ### Added
 
+- `dispute_stats` view returning global dispute counters (open, resolved, expired) (#750).
+- `full_token_info` view returning name, symbol, decimal, total_supply, max_supply, and version (#747).
+- `escrow_stats_for_depositor` view counting active, released, and refunded escrows per depositor (#740).
+- Tests for `emergency_withdraw` escrow-funds protection (#744).
 - Pre-commit hook (`make install-hooks`) running `cargo fmt` and `cargo clippy` before every commit.
 - CHANGELOG.md tracking all significant changes per release.
 - Inline doc comments explaining the purpose of each test scenario across all test files.

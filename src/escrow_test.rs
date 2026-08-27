@@ -1414,3 +1414,58 @@ fn test_protocol_fee_not_applied_to_refunds() {
     assert_eq!(token_client.balance(&t.depositor), 50_000_000);
     assert_eq!(token_client.balance(&t.treasury), 0);
 }
+
+// ── #740: escrow_stats_for_depositor ─────────────────────────────────────────
+
+#[test]
+fn test_escrow_stats_for_depositor_counts_statuses() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 3);
+    let expiry = t.e.ledger().sequence() + 1000;
+
+    let id1 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    let id2 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    let _id3 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+
+    t.client.release_escrow(&t.depositor, &id1);
+    t.client.refund_escrow(&t.depositor, &id2);
+    // id3 stays active.
+
+    let stats = t.client.escrow_stats_for_depositor(&t.depositor);
+    assert_eq!(stats.active, 1);
+    assert_eq!(stats.released, 1);
+    assert_eq!(stats.refunded, 1);
+    assert_eq!(stats.total_value_locked, crate::storage_types::MIN_ESCROW_AMOUNT);
+}
+
+#[test]
+fn test_escrow_stats_for_depositor_empty_for_unknown_depositor() {
+    let t = setup();
+    let other = Address::generate(&t.e);
+    let stats = t.client.escrow_stats_for_depositor(&other);
+    assert_eq!(stats.active, 0);
+    assert_eq!(stats.released, 0);
+    assert_eq!(stats.refunded, 0);
+    assert_eq!(stats.total_value_locked, 0);
+}

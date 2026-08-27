@@ -47,6 +47,8 @@ pub enum DataKey {
     TotalFeesCollected,
     SplitCount,
     Split(u32),
+    SplitProtocolFeeBps,
+    SplitProtocolTreasury,
     PayeeRecurrings(Address),
     MediationFeeBps,
     Holders,
@@ -74,6 +76,7 @@ pub enum DataKey {
     DisputeAppeal(u32),
     DisputeOpenedAt(u32),
     InitializedAtLedger,
+    DisputeStats,
 }
 
 // Closes #570: per-depositor escrow count limit
@@ -117,8 +120,6 @@ pub struct ContractInfo {
     pub initialized_at_ledger: u32,
 }
 
-use soroban_sdk::{contracttype, Address};
-
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RecurringExecution {
@@ -127,28 +128,34 @@ pub struct RecurringExecution {
     pub amount: i128,
 }
 
+// #747: Rich token metadata view
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DataKey {
-    // ... existing keys
-    RecurringHistory(u32),
+#[derive(Clone, Debug, PartialEq)]
+pub struct FullTokenInfo {
+    pub name: String,
+    pub symbol: String,
+    pub decimal: u32,
+    pub total_supply: i128,
+    pub max_supply: i128,
+    pub version: String,
 }
 
-use soroban_sdk::{contracttype, Address};
-
+// #740: Per-depositor escrow history summary
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DataKey {
-    // ... existing keys
-    PayeeRecurrings(Address),
+#[derive(Clone, Debug, PartialEq)]
+pub struct EscrowDepositorStats {
+    pub active: u32,
+    pub released: u32,
+    pub refunded: u32,
+    pub total_value_locked: i128,
 }
 
-use soroban_sdk::{contracttype, Address};
-
+// #750: Global dispute statistics counters
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DataKey {
-    // ... existing keys
-    SplitProtocolFeeBps,
-    SplitProtocolTreasury,
+#[derive(Clone, Debug, PartialEq)]
+pub struct DisputeStats {
+    pub open: u32,
+    pub resolved_for_beneficiary: u32,
+    pub resolved_for_depositor: u32,
+    pub expired: u32,
 }

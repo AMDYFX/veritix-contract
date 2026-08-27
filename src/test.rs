@@ -703,3 +703,140 @@ fn test_whitelist_add_over_50_panics() {
 
     client.add_to_whitelist_batch(&admin, &accounts);
 }
+
+// ── #747: full_token_info ─────────────────────────────────────────────────────
+
+#[test]
+fn test_full_token_info_returns_metadata_after_initialize() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let info = client.full_token_info();
+    assert_eq!(info.name, soroban_sdk::String::from_str(&e, "VeriTix"));
+    assert_eq!(info.symbol, soroban_sdk::String::from_str(&e, "VTX"));
+    assert_eq!(info.decimal, 7);
+    assert_eq!(info.total_supply, 0);
+    assert_eq!(info.max_supply, i128::MAX);
+    assert_eq!(info.version, soroban_sdk::String::from_str(&e, "1.0.0"));
+}
+
+#[test]
+fn test_full_token_info_with_max_supply_and_mint() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize_with_max_supply(&admin, &1_000_000);
+
+    let user = Address::generate(&e);
+    client.mint(&admin, &user, &500);
+
+    let info = client.full_token_info();
+    assert_eq!(info.total_supply, 500);
+    assert_eq!(info.max_supply, 1_000_000);
+}
+
+// ── #744: emergency_withdraw tests ────────────────────────────────────────────
+
+#[test]
+fn test_emergency_withdraw_transfers_stranded_tokens() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin_client = token::StellarAssetClient::new(&e, &token);
+    let token_client = token::Client::new(&e, &token);
+    token_admin_client.mint(&contract_id, &1000);
+
+    let recipient = Address::generate(&e);
+    client.emergency_withdraw(&admin, &recipient, &token, &1000);
+
+    assert_eq!(token_client.balance(&recipient), 1000);
+    assert_eq!(token_client.balance(&contract_id), 0);
+}
+
+#[test]
+#[should_panic(expected = "Unauthorized: caller is not the contract admin")]
+fn test_emergency_withdraw_requires_admin() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let stranger = Address::generate(&e);
+    let token = create_token_contract(&e, &admin);
+    let token_admin_client = token::StellarAssetClient::new(&e, &token);
+    token_admin_client.mint(&contract_id, &100);
+
+    let recipient = Address::generate(&e);
+    client.emergency_withdraw(&stranger, &recipient, &token, &100);
+}
+
+#[test]
+#[should_panic(expected = "Insufficient non-escrowed funds")]
+fn test_emergency_withdraw_cannot_exceed_unencumbered_balance() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin_client = token::StellarAssetClient::new(&e, &token);
+    // Only 100 stranded -> withdrawing 200 must fail.
+    token_admin_client.mint(&contract_id, &100);
+
+    let recipient = Address::generate(&e);
+    client.emergency_withdraw(&admin, &recipient, &token, &200);
+}
+
+#[test]
+fn test_emergency_withdraw_emits_event() {
+    use soroban_sdk::testutils::Events;
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin_client = token::StellarAssetClient::new(&e, &token);
+    token_admin_client.mint(&contract_id, &100);
+
+    let recipient = Address::generate(&e);
+    client.emergency_withdraw(&admin, &recipient, &token, &100);
+
+    let events = e.events().all();
+    assert!(!events.events().is_empty(), "em_wdraw event should be emitted");
+}
+
+#[test]
+#[should_panic(expected = "Amount must be positive")]
+fn test_emergency_withdraw_zero_stranded_tokens_panics() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin_client = token::StellarAssetClient::new(&e, &token);
+    token_admin_client.mint(&contract_id, &100);
+
+    let recipient = Address::generate(&e);
+    client.emergency_withdraw(&admin, &recipient, &token, &0);
+}

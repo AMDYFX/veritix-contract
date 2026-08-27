@@ -1,4 +1,6 @@
-use crate::storage_types::{DataKey, MAX_ESCROWS_PER_DEPOSITOR, MAX_MEMO_BYTES};
+use crate::storage_types::{
+    DataKey, EscrowDepositorStats, MAX_ESCROWS_PER_DEPOSITOR, MAX_MEMO_BYTES,
+};
 use soroban_sdk::{contracttype, token, Address, Bytes, Env, Vec};
 
 #[contracttype]
@@ -561,6 +563,34 @@ pub fn clear_lien(e: Env, caller: Address, escrow_id: u32) {
 
 pub fn get_escrows_by_depositor(e: Env, depositor: Address) -> Vec<u32> {
     read_escrow_ids(&e, DataKey::DepositorEscrows(depositor))
+}
+
+// #740: Summarize a depositor's escrow history by status.
+pub fn escrow_stats_for_depositor(e: &Env, depositor: &Address) -> EscrowDepositorStats {
+    let ids = read_escrow_ids(e, DataKey::DepositorEscrows(depositor.clone()));
+    let mut stats = EscrowDepositorStats {
+        active: 0,
+        released: 0,
+        refunded: 0,
+        total_value_locked: 0,
+    };
+    for i in 0..ids.len() {
+        let id = ids.get(i).unwrap();
+        let record: EscrowRecord = e
+            .storage()
+            .persistent()
+            .get(&DataKey::Escrow(id))
+            .unwrap_or_else(|| panic!("escrow {} not found", id));
+        if record.released {
+            stats.released += 1;
+        } else if record.refunded {
+            stats.refunded += 1;
+        } else {
+            stats.active += 1;
+            stats.total_value_locked += record.amount;
+        }
+    }
+    stats
 }
 
 pub fn get_escrows_by_beneficiary(e: Env, beneficiary: Address) -> Vec<u32> {

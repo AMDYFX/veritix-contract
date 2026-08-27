@@ -1,4 +1,7 @@
-use crate::storage_types::{DataKey, RecurringPayment, ResolverStats, VestingRecord, ContractInfo};
+use crate::storage_types::{
+    ContractInfo, DataKey, DisputeStats, EscrowDepositorStats, FullTokenInfo, RecurringExecution,
+    RecurringPayment, ResolverStats, VestingRecord,
+};
 use crate::validation::require_positive_amount;
 use crate::{
     admin, allowance, balance, dispute, escrow, multi_escrow, permit, recurring, snapshot,
@@ -150,6 +153,9 @@ pub trait VeriTixPayTrait {
 
     // ── #453: Resolver stats ─────────────────────────────────────────────────
     fn resolver_stats(e: Env, resolver: Address) -> ResolverStats;
+    fn dispute_stats(e: Env) -> DisputeStats;
+    fn full_token_info(e: Env) -> FullTokenInfo;
+    fn escrow_stats_for_depositor(e: Env, depositor: Address) -> EscrowDepositorStats;
 
     // ── #454: Protocol fee stats ─────────────────────────────────────────────
     fn protocol_fee_stats(e: Env) -> (u32, Address, i128);
@@ -877,6 +883,28 @@ impl VeriTixPayTrait for VeriTixPay {
         ContractInfo { version, admin, is_paused, initialized_at_ledger }
     }
 
+    fn dispute_stats(e: Env) -> DisputeStats {
+        crate::dispute::get_dispute_stats(&e)
+    }
+
+    fn full_token_info(e: Env) -> FullTokenInfo {
+        let version: soroban_sdk::String =
+            e.storage().persistent().get(&DataKey::Version).unwrap_or(String::from_str(&e, "1.0.0"));
+        let max_supply: i128 = e.storage().persistent().get(&DataKey::MaxSupply).unwrap_or(i128::MAX);
+        FullTokenInfo {
+            name: soroban_sdk::String::from_str(&e, "VeriTix"),
+            symbol: soroban_sdk::String::from_str(&e, "VTX"),
+            decimal: 7,
+            total_supply: balance::read_supply(&e),
+            max_supply,
+            version,
+        }
+    }
+
+    fn escrow_stats_for_depositor(e: Env, depositor: Address) -> EscrowDepositorStats {
+        crate::escrow::escrow_stats_for_depositor(&e, &depositor)
+    }
+
     fn contract_summary(e: Env) -> ContractSummary {
         let admin: Address = e
             .storage()
@@ -1207,9 +1235,9 @@ impl VeriTixPayTrait for VeriTixPay {
     }
 }
 
-use soroban_sdk::{contract, contractimpl, Env, Vec};
-use crate::storage_types::RecurringExecution;
-
+// #773: Auxiliary contract exposing recurring history/payee views and split fee
+// configuration. The four separate contract blocks merged in #773 are
+// consolidated here so the crate compiles.
 #[contract]
 pub struct VeritixContract;
 
@@ -1218,61 +1246,27 @@ impl VeritixContract {
     /// Retrieves the execution audit log for a specific recurring payment schedule.
     pub fn get_recurring_history(e: Env, recurring_id: u32) -> Vec<RecurringExecution> {
         let key = DataKey::RecurringHistory(recurring_id);
-        e.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(&e))
+        e.storage().instance().get(&key).unwrap_or_else(|| Vec::new(&e))
     }
-}
 
-use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
-use crate::storage_types::DataKey;
-
-#[contract]
-pub struct VeritixContract;
-
-#[contractimpl]
-impl VeritixContract {
     /// Retrieves all recurring payment IDs associated with a specific payee address.
     pub fn get_recurring_by_payee(e: Env, payee: Address) -> Vec<u32> {
         let key = DataKey::PayeeRecurrings(payee);
-        e.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(&e))
+        e.storage().instance().get(&key).unwrap_or_else(|| Vec::new(&e))
     }
-}
 
-use soroban_sdk::{contract, contractimpl, Env};
-use crate::storage_types::DataKey;
-
-#[contract]
-pub struct VeritixContract;
-
-#[contractimpl]
-impl VeritixContract {
-    /// Returns a boolean indicating whether a recurring payment schedule is currently active and not paused,
-    /// avoiding the overhead of fetching the full payment record.
+    /// Returns a boolean indicating whether a recurring payment schedule is currently active.
     pub fn is_recurring_active(e: Env, recurring_id: u32) -> bool {
-        let key = DataKey::Recurring(recurring_id);
-        
-        // Retrieve the recurring record from storage instance/persistent storage
-        if let Some(recurring) = e.storage().instance().get::<DataKey, crate::storage_types::RecurringPayment>(&key) {
-            recurring.active && !recurring.paused
-        } else {
-            false
+        match e
+            .storage()
+            .persistent()
+            .get::<DataKey, crate::recurring::RecurringRecord>(&DataKey::Recurring(recurring_id))
+        {
+            Some(record) => record.active,
+            None => false,
         }
     }
-}
 
-use soroban_sdk::{contract, contractimpl, Address, Env, Option};
-use crate::storage_types::DataKey;
-
-#[contract]
-pub struct VeritixContract;
-
-#[contractimpl]
-impl VeritixContract {
     /// Sets the protocol fee and treasury address for split distributions (admin-only, max 2%).
     pub fn set_split_protocol_fee(e: Env, admin: Address, fee_bps: u32, treasury: Address) {
         crate::splitter::set_split_fee_config(&e, &admin, fee_bps, &treasury);
