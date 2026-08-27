@@ -434,123 +434,19 @@ fn test_full_contract_lifecycle() {
 #[test]
 #[should_panic(expected = "AlreadyInitialized: contract state is locked")]
 fn test_initialize_twice_panics() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+    client.initialize(&admin);
+}
+
 // ── #680: Supply invariant across 1000 deterministic transfers ────────────────
 
 #[test]
 fn test_supply_invariant_across_1000_transfers() {
-// ── #692: create_vesting ──────────────────────────────────────────────────────
-
-#[test]
-fn test_create_vesting_locks_tokens_and_claim_succeeds_after_vesting() {
-// ── #687: get_contract_info ───────────────────────────────────────────────────
-
-#[test]
-fn test_get_contract_info_after_initialize() {
-    let e = Env::default();
-    e.mock_all_auths();
-    let contract_id = e.register_contract(None, VeriTixPay);
-    let client = VeriTixPayClient::new(&e, &contract_id);
-    let admin = Address::generate(&e);
-    client.initialize(&admin);
-
-    let token = create_token_contract(&e, &admin);
-    let token_admin = token::StellarAssetClient::new(&e, &token);
-    let token_client = token::Client::new(&e, &token);
-    token_admin.mint(&admin, &1_000);
-
-    let holder = Address::generate(&e);
-    let vesting_ledger = e.ledger().sequence() + 100;
-
-    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
-    let vestings = client.get_vesting_by_holder(&holder);
-    assert_eq!(vestings.len(), 1);
-    assert_eq!(vestings.get(0).unwrap(), id);
-
-    // Tokens were locked into the contract.
-    assert_eq!(token_client.balance(&contract_id), 500);
-
-    e.ledger().with_mut(|l| l.sequence_number = vesting_ledger);
-
-    client.claim_vesting(&holder, &id);
-    assert_eq!(token_client.balance(&holder), 500);
-}
-
-#[test]
-#[should_panic(expected = "vesting period not yet reached")]
-fn test_create_vesting_claim_before_vesting_panics() {
-    let e = Env::default();
-    e.mock_all_auths();
-    let contract_id = e.register_contract(None, VeriTixPay);
-    let client = VeriTixPayClient::new(&e, &contract_id);
-    let admin = Address::generate(&e);
-    client.initialize(&admin);
-
-    let token = create_token_contract(&e, &admin);
-    let token_admin = token::StellarAssetClient::new(&e, &token);
-    token_admin.mint(&admin, &1_000);
-
-    let holder = Address::generate(&e);
-    let vesting_ledger = e.ledger().sequence() + 100;
-    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
-
-    // Claim before the vesting date panics.
-    client.claim_vesting(&holder, &id);
-}
-
-#[test]
-#[should_panic(expected = "vesting already claimed")]
-fn test_create_vesting_double_claim_panics() {
-
-    let admin = Address::generate(&e);
-    let init_ledger = e.ledger().sequence();
-    client.initialize(&admin);
-
-    let info = client.get_contract_info();
-    assert_eq!(info.admin, admin);
-    assert_eq!(info.version, soroban_sdk::String::from_str(&e, "1.0.0"));
-    assert_eq!(info.is_paused, false);
-    assert_eq!(info.initialized_at_ledger, init_ledger);
-}
-
-#[test]
-fn test_get_contract_info_reflects_pause_state() {
-    let e = Env::default();
-    e.mock_all_auths();
-    let contract_id = e.register_contract(None, VeriTixPay);
-    let client = VeriTixPayClient::new(&e, &contract_id);
-    let admin = Address::generate(&e);
-    client.initialize(&admin);
-    client.initialize(&admin);
-}
-
-    let token = create_token_contract(&e, &admin);
-    let token_admin = token::StellarAssetClient::new(&e, &token);
-    token_admin.mint(&admin, &1_000);
-
-    let holder = Address::generate(&e);
-    let vesting_ledger = e.ledger().sequence() + 100;
-    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
-
-    e.ledger().with_mut(|l| l.sequence_number = vesting_ledger);
-
-    client.claim_vesting(&holder, &id);
-    client.claim_vesting(&holder, &id);
-}
-
-#[test]
-#[should_panic(expected = "vesting ledger must be in the future")]
-fn test_create_vesting_rejects_past_ledger() {
-
-    let admin = Address::generate(&e);
-    client.initialize(&admin);
-
-    client.set_paused(&admin, &true);
-    let info = client.get_contract_info();
-    assert_eq!(info.is_paused, true);
-}
-
-#[test]
-fn test_get_contract_info_with_max_supply_initialization() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -584,11 +480,143 @@ fn test_get_contract_info_with_max_supply_initialization() {
         sum += client.balance(&addrs.get(i).unwrap());
     }
     assert_eq!(sum, 10000);
+}
+
+// ── #692: create_vesting ──────────────────────────────────────────────────────
+
+#[test]
+fn test_create_vesting_locks_tokens_and_claim_succeeds_after_vesting() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    let token_client = token::Client::new(&e, &token);
+    token_admin.mint(&admin, &1_000);
+
+    let holder = Address::generate(&e);
+    let vesting_ledger = e.ledger().sequence() + 100;
+
+    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
+    let vestings = client.get_vesting_by_holder(&holder);
+    assert_eq!(vestings.len(), 1);
+    assert_eq!(vestings.get(0).unwrap(), id);
+
+    // Tokens were locked into the contract.
+    assert_eq!(token_client.balance(&contract_id), 500);
+
+    e.ledger().with_mut(|l| l.sequence_number = vesting_ledger);
+
+    client.claim_vesting(&holder, &id);
+    assert_eq!(token_client.balance(&holder), 500);
+}
+
+// ── #687: get_contract_info ───────────────────────────────────────────────────
+
+#[test]
+fn test_get_contract_info_after_initialize() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    let init_ledger = e.ledger().sequence();
+    client.initialize(&admin);
+
+    let info = client.get_contract_info();
+    assert_eq!(info.admin, admin);
+    assert_eq!(info.version, soroban_sdk::String::from_str(&e, "1.0.0"));
+    assert_eq!(info.is_paused, false);
+    assert_eq!(info.initialized_at_ledger, init_ledger);
+}
+
+#[test]
+#[should_panic(expected = "vesting period not yet reached")]
+fn test_create_vesting_claim_before_vesting_panics() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&admin, &1_000);
+
+    let holder = Address::generate(&e);
+    let vesting_ledger = e.ledger().sequence() + 100;
+    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
+
+    // Claim before the vesting date panics.
+    client.claim_vesting(&holder, &id);
+}
+
+#[test]
+#[should_panic(expected = "vesting already claimed")]
+fn test_create_vesting_double_claim_panics() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&admin, &1_000);
+
+    let holder = Address::generate(&e);
+    let vesting_ledger = e.ledger().sequence() + 100;
+    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
+
+    e.ledger().with_mut(|l| l.sequence_number = vesting_ledger);
+
+    client.claim_vesting(&holder, &id);
+    // Second claim must panic.
+    client.claim_vesting(&holder, &id);
+}
+
+#[test]
+fn test_get_contract_info_reflects_pause_state() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    client.set_paused(&admin, &true);
+    let info = client.get_contract_info();
+    assert_eq!(info.is_paused, true);
+}
+
+#[test]
+#[should_panic(expected = "vesting ledger must be in the future")]
+fn test_create_vesting_rejects_past_ledger() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
     let token = create_token_contract(&e, &admin);
     let holder = Address::generate(&e);
 
     client.create_vesting(&admin, &holder, &token, &500, &e.ledger().sequence());
+}
 
+#[test]
+fn test_get_contract_info_with_max_supply_initialization() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
     let admin = Address::generate(&e);
     let init_ledger = e.ledger().sequence();
     client.initialize_with_max_supply(&admin, &1_000_000);
