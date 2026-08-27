@@ -1,9 +1,16 @@
 #![cfg(test)]
 
-use soroban_sdk::{testutils::Address as _, vec, Address, Env};
 use crate::contract::{VeriTixPay, VeriTixPayClient};
+use soroban_sdk::{testutils::Address as _, vec, Address, Env};
 
-fn setup() -> (Env, VeriTixPayClient<'static>, Address, Address, Address, Address) {
+fn setup() -> (
+    Env,
+    VeriTixPayClient<'static>,
+    Address,
+    Address,
+    Address,
+    Address,
+) {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -25,11 +32,7 @@ fn test_create_multi_escrow_transfers_total() {
     let (e, client, depositor, organiser, venue, token) = setup();
     let expiry = e.ledger().sequence() + 1000;
 
-    let recipients = vec![
-        &e,
-        (organiser.clone(), 700_i128),
-        (venue.clone(), 300_i128),
-    ];
+    let recipients = vec![&e, (organiser.clone(), 700_i128), (venue.clone(), 300_i128)];
 
     let id = client.create_multi_escrow(&depositor, &recipients, &token, &expiry);
     assert_eq!(id, 0);
@@ -43,11 +46,7 @@ fn test_release_multi_escrow_pays_each_recipient() {
     let (e, client, depositor, organiser, venue, token) = setup();
     let expiry = e.ledger().sequence() + 1000;
 
-    let recipients = vec![
-        &e,
-        (organiser.clone(), 700_i128),
-        (venue.clone(), 300_i128),
-    ];
+    let recipients = vec![&e, (organiser.clone(), 700_i128), (venue.clone(), 300_i128)];
 
     let id = client.create_multi_escrow(&depositor, &recipients, &token, &expiry);
     client.release_multi_escrow(&depositor, &id);
@@ -62,11 +61,7 @@ fn test_refund_multi_escrow_returns_all_to_depositor() {
     let (e, client, depositor, organiser, venue, token) = setup();
     let expiry = e.ledger().sequence() + 1000;
 
-    let recipients = vec![
-        &e,
-        (organiser.clone(), 700_i128),
-        (venue.clone(), 300_i128),
-    ];
+    let recipients = vec![&e, (organiser.clone(), 700_i128), (venue.clone(), 300_i128)];
 
     let depositor_balance_before = {
         let tc = soroban_sdk::token::Client::new(&e, &token);

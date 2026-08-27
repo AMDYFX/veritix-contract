@@ -1,8 +1,12 @@
-use soroban_sdk::{Address, Env};
 use crate::storage_types::DataKey;
+use soroban_sdk::{Address, Env};
 
 pub fn require_not_paused(e: &Env) {
-    if e.storage().persistent().get::<_, bool>(&DataKey::Paused).unwrap_or(false) {
+    if e.storage()
+        .persistent()
+        .get::<_, bool>(&DataKey::Paused)
+        .unwrap_or(false)
+    {
         panic!("ContractPaused: contract is paused");
     }
 }

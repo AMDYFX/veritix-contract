@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, Address, Env, Vec};
 use crate::storage_types::DataKey;
+use soroban_sdk::{contracttype, Address, Env, Vec};
 
 #[contracttype]
 #[derive(Clone)]
@@ -55,11 +55,7 @@ pub fn create_split(
 
     // Pull tokens from sender into the contract
     let token_client = soroban_sdk::token::Client::new(&e, &token);
-    token_client.transfer(
-        &sender,
-        &e.current_contract_address(),
-        &total_amount,
-    );
+    token_client.transfer(&sender, &e.current_contract_address(), &total_amount);
 
     let id: u32 = e
         .storage()
@@ -79,7 +75,9 @@ pub fn create_split(
     };
 
     save_record(&e, &record);
-    e.storage().persistent().set(&DataKey::SplitCount, &(id + 1));
+    e.storage()
+        .persistent()
+        .set(&DataKey::SplitCount, &(id + 1));
 
     // Emit split created event
     e.events().publish(
@@ -109,12 +107,24 @@ pub fn distribute_split(e: Env, caller: Address, split_id: u32) {
     record.distributed = true;
     save_record(&e, &record);
 
-    // Pay each recipient their share
+    // Pay each recipient their share, awarding any remainder (dust) to the
+    // first recipient so no stroop is ever lost.
     let token_client = soroban_sdk::token::Client::new(&e, &record.token);
+    let mut allocated: i128 = 0;
     for i in 0..record.recipients.len() {
         let (recipient, bps) = record.recipients.get(i).unwrap();
         let amount = record.total_amount * bps as i128 / 10000;
         token_client.transfer(&e.current_contract_address(), recipient, &amount);
+        allocated += amount;
+    }
+    // Hand the rounding remainder to the first recipient if any stroops are left.
+    if allocated < record.total_amount {
+        let (first, _) = record.recipients.get(0).unwrap();
+        token_client.transfer(
+            &e.current_contract_address(),
+            first,
+            &(record.total_amount - allocated),
+        );
     }
 }
 
@@ -135,16 +145,29 @@ pub fn cancel_split(e: Env, caller: Address, split_id: u32) {
 
     // Return all funds to the sender
     let token_client = soroban_sdk::token::Client::new(&e, &record.token);
-    token_client.transfer(&e.current_contract_address(), &record.sender, &record.total_amount);
+    token_client.transfer(
+        &e.current_contract_address(),
+        &record.sender,
+        &record.total_amount,
+    );
 }
 
-pub fn replace_split_recipient(e: Env, sender: Address, split_id: u32, old_recipient: Address, new_recipient: Address) {
+pub fn replace_split_recipient(
+    e: Env,
+    sender: Address,
+    split_id: u32,
+    old_recipient: Address,
+    new_recipient: Address,
+) {
     sender.require_auth();
 
     let mut record = load_record(&e, split_id);
 
     // Verify sender is the split creator
-    assert!(sender == record.sender, "not authorised to replace recipient");
+    assert!(
+        sender == record.sender,
+        "not authorised to replace recipient"
+    );
     // Verify split is not distributed or cancelled
     assert!(!record.distributed, "split has already been distributed");
     assert!(!record.cancelled, "split has been cancelled");
@@ -172,7 +195,9 @@ pub fn replace_split_recipient(e: Env, sender: Address, split_id: u32, old_recip
 
     // Replace in place, preserving share_bps
     let index = found_index.unwrap();
-    record.recipients.set(index as u32, (new_recipient.clone(), old_bps));
+    record
+        .recipients
+        .set(index as u32, (new_recipient.clone(), old_bps));
 
     // Save the updated record
     save_record(&e, &record);
