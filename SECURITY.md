@@ -16,7 +16,7 @@ Include:
 - Triage and severity assessment within **5 days**
 - Patch or mitigation within **14 days** for critical issues
 
-## Scope
+## Scope.
 
 **In scope:**
 - All functions in `src/` and `veritixpay/contract/token/src/`

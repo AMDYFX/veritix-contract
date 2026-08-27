@@ -11,7 +11,7 @@ On-chain payment infrastructure for the Veritix ticketing platform, built with R
 
 ---
 
-## Overview
+## Overview.
 
 Veritix Pay is the payment layer of a blockchain-based ticketing system. It lives entirely on-chain as a Soroban smart contract and handles all financial operations that power the Veritix platform — from a fan buying a ticket to an organizer receiving settlement funds after an event.
 
