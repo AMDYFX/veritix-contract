@@ -1,7 +1,10 @@
 #![cfg(test)]
 
-use soroban_sdk::{testutils::{Address as _, Ledger}, Address, Env, String};
 use crate::contract::{VeriTixPay, VeriTixPayClient};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    Address, Env, String,
+};
 
 fn setup() -> (Env, VeriTixPayClient<'static>, Address, Address) {
     let e = Env::default();

@@ -1,7 +1,10 @@
 #[cfg(test)]
 mod tests {
     use crate::contract::{VeriTixPay, VeriTixPayClient};
-    use soroban_sdk::{testutils::{Address as _, Events as _}, Address, Env, Vec};
+    use soroban_sdk::{
+        testutils::{Address as _, Events as _},
+        Address, Env, Vec,
+    };
 
     struct TestEnv<'a> {
         e: Env,
@@ -31,17 +34,31 @@ mod tests {
         // Initialize contract with admin
         client.initialize(&sender);
 
-        TestEnv { e, client, sender, recipient1, recipient2, new_recipient, token }
+        TestEnv {
+            e,
+            client,
+            sender,
+            recipient1,
+            recipient2,
+            new_recipient,
+            token,
+        }
     }
 
     #[test]
     fn test_reentrancy_guard_blocks_double_distribution() {
         let env = Env::default();
-        
+
         let mut record = crate::splitter::SplitRecord {
             id: 0,
             sender: Address::generate(&env),
-            recipients: Vec::from_array(&env, [(Address::generate(&env), 5000), (Address::generate(&env), 5000)]),
+            recipients: Vec::from_array(
+                &env,
+                [
+                    (Address::generate(&env), 5000),
+                    (Address::generate(&env), 5000),
+                ],
+            ),
             token: Address::generate(&env),
             total_amount: 1000,
             event_ledger: env.ledger().sequence() + 1000,
@@ -61,7 +78,10 @@ mod tests {
         let event_ledger = t.e.ledger().sequence() + 1000;
 
         // Create split with two recipients
-        let recipients = Vec::from_array(&t.e, [(t.recipient1.clone(), 6000), (t.recipient2.clone(), 4000)]);
+        let recipients = Vec::from_array(
+            &t.e,
+            [(t.recipient1.clone(), 6000), (t.recipient2.clone(), 4000)],
+        );
         let split_id = crate::splitter::create_split(
             t.e.clone(),
             t.sender.clone(),
@@ -78,7 +98,8 @@ mod tests {
         assert_eq!(record.recipients.get(0).unwrap().1, 6000);
 
         // Replace recipient1 with new_recipient
-        t.client.replace_split_recipient(&t.sender, &split_id, &t.recipient1, &t.new_recipient);
+        t.client
+            .replace_split_recipient(&t.sender, &split_id, &t.recipient1, &t.new_recipient);
 
         // Verify the recipient was replaced, share_bps preserved
         let updated_record = crate::splitter::load_record(&t.e, split_id);
@@ -99,7 +120,10 @@ mod tests {
         let non_existent_recipient = Address::generate(&t.e);
 
         // Create split
-        let recipients = Vec::from_array(&t.e, [(t.recipient1.clone(), 6000), (t.recipient2.clone(), 4000)]);
+        let recipients = Vec::from_array(
+            &t.e,
+            [(t.recipient1.clone(), 6000), (t.recipient2.clone(), 4000)],
+        );
         let split_id = crate::splitter::create_split(
             t.e.clone(),
             t.sender.clone(),
@@ -110,7 +134,12 @@ mod tests {
         );
 
         // Try to replace a non-existent recipient
-        t.client.replace_split_recipient(&t.sender, &split_id, &non_existent_recipient, &t.new_recipient);
+        t.client.replace_split_recipient(
+            &t.sender,
+            &split_id,
+            &non_existent_recipient,
+            &t.new_recipient,
+        );
     }
 
     #[test]
@@ -120,7 +149,10 @@ mod tests {
         let event_ledger = t.e.ledger().sequence() + 1000;
 
         // Create split
-        let recipients = Vec::from_array(&t.e, [(t.recipient1.clone(), 6000), (t.recipient2.clone(), 4000)]);
+        let recipients = Vec::from_array(
+            &t.e,
+            [(t.recipient1.clone(), 6000), (t.recipient2.clone(), 4000)],
+        );
         let split_id = crate::splitter::create_split(
             t.e.clone(),
             t.sender.clone(),
@@ -131,7 +163,8 @@ mod tests {
         );
 
         // Try to replace recipient1 with recipient2 (already exists)
-        t.client.replace_split_recipient(&t.sender, &split_id, &t.recipient1, &t.recipient2);
+        t.client
+            .replace_split_recipient(&t.sender, &split_id, &t.recipient1, &t.recipient2);
     }
 
     #[test]
@@ -142,7 +175,10 @@ mod tests {
         let unauthorized_user = Address::generate(&t.e);
 
         // Create split
-        let recipients = Vec::from_array(&t.e, [(t.recipient1.clone(), 6000), (t.recipient2.clone(), 4000)]);
+        let recipients = Vec::from_array(
+            &t.e,
+            [(t.recipient1.clone(), 6000), (t.recipient2.clone(), 4000)],
+        );
         let split_id = crate::splitter::create_split(
             t.e.clone(),
             t.sender.clone(),
@@ -153,7 +189,12 @@ mod tests {
         );
 
         // Try to replace recipient from non-sender account
-        t.client.replace_split_recipient(&unauthorized_user, &split_id, &t.recipient1, &t.new_recipient);
+        t.client.replace_split_recipient(
+            &unauthorized_user,
+            &split_id,
+            &t.recipient1,
+            &t.new_recipient,
+        );
     }
 
     #[test]
@@ -163,7 +204,10 @@ mod tests {
         let event_ledger = t.e.ledger().sequence() + 1000;
 
         // Create split
-        let recipients = Vec::from_array(&t.e, [(t.recipient1.clone(), 6000), (t.recipient2.clone(), 4000)]);
+        let recipients = Vec::from_array(
+            &t.e,
+            [(t.recipient1.clone(), 6000), (t.recipient2.clone(), 4000)],
+        );
         let split_id = crate::splitter::create_split(
             t.e.clone(),
             t.sender.clone(),
@@ -177,7 +221,8 @@ mod tests {
         crate::splitter::distribute_split(t.e.clone(), t.sender.clone(), split_id);
 
         // Try to replace recipient after distribution
-        t.client.replace_split_recipient(&t.sender, &split_id, &t.recipient1, &t.new_recipient);
+        t.client
+            .replace_split_recipient(&t.sender, &split_id, &t.recipient1, &t.new_recipient);
     }
 
     #[test]
@@ -187,7 +232,10 @@ mod tests {
         let event_ledger = t.e.ledger().sequence() + 1000;
 
         // Create split
-        let recipients = Vec::from_array(&t.e, [(t.recipient1.clone(), 6000), (t.recipient2.clone(), 4000)]);
+        let recipients = Vec::from_array(
+            &t.e,
+            [(t.recipient1.clone(), 6000), (t.recipient2.clone(), 4000)],
+        );
         let split_id = crate::splitter::create_split(
             t.e.clone(),
             t.sender.clone(),
@@ -211,7 +259,10 @@ mod tests {
         let event_ledger = t.e.ledger().sequence() + 1000;
 
         // Create split
-        let recipients = Vec::from_array(&t.e, [(t.recipient1.clone(), 6000), (t.recipient2.clone(), 4000)]);
+        let recipients = Vec::from_array(
+            &t.e,
+            [(t.recipient1.clone(), 6000), (t.recipient2.clone(), 4000)],
+        );
         let split_id = crate::splitter::create_split(
             t.e.clone(),
             t.sender.clone(),
@@ -225,7 +276,8 @@ mod tests {
         crate::splitter::cancel_split(t.e.clone(), t.sender.clone(), split_id);
 
         // Try to replace recipient after cancellation
-        t.client.replace_split_recipient(&t.sender, &split_id, &t.recipient1, &t.new_recipient);
+        t.client
+            .replace_split_recipient(&t.sender, &split_id, &t.recipient1, &t.new_recipient);
     }
 
     // ── #576: Splitter stress test ───────────────────────────────────────────────
@@ -268,7 +320,10 @@ mod tests {
             event_ledger,
         );
 
-        assert_eq!(token_client.balance(&e.current_contract_address()), total_amount_1);
+        assert_eq!(
+            token_client.balance(&e.current_contract_address()),
+            total_amount_1
+        );
 
         crate::splitter::distribute_split(e.clone(), sender.clone(), split_id);
 
@@ -318,5 +373,147 @@ mod tests {
         }
         assert_eq!(total_received2, 1);
         assert_eq!(non_zero_count, 1);
+    }
+
+    // ── #673: splitter edge case validation ─────────────────────────────────────
+
+    #[test]
+    #[should_panic(expected = "total basis points must equal 10000")]
+    fn test_create_split_bps_under_10000_panics() {
+        let t = setup();
+        let event_ledger = t.e.ledger().sequence() + 1000;
+        let recipients = Vec::from_array(
+            &t.e,
+            [(t.recipient1.clone(), 3000), (t.recipient2.clone(), 3000)],
+        );
+        t.e.as_contract(&t.client.address, || {
+            crate::splitter::create_split(
+                t.e.clone(),
+                t.sender.clone(),
+                recipients,
+                t.token.clone(),
+                500,
+                event_ledger,
+            );
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "total basis points must equal 10000")]
+    fn test_create_split_bps_over_10000_panics() {
+        let t = setup();
+        let event_ledger = t.e.ledger().sequence() + 1000;
+        let recipients = Vec::from_array(
+            &t.e,
+            [(t.recipient1.clone(), 6000), (t.recipient2.clone(), 6000)],
+        );
+        t.e.as_contract(&t.client.address, || {
+            crate::splitter::create_split(
+                t.e.clone(),
+                t.sender.clone(),
+                recipients,
+                t.token.clone(),
+                1000,
+                event_ledger,
+            );
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "total amount must be greater than zero")]
+    fn test_create_split_zero_total_panics() {
+        let t = setup();
+        let event_ledger = t.e.ledger().sequence() + 1000;
+        let recipients = Vec::from_array(
+            &t.e,
+            [(t.recipient1.clone(), 5000), (t.recipient2.clone(), 5000)],
+        );
+        t.e.as_contract(&t.client.address, || {
+            crate::splitter::create_split(
+                t.e.clone(),
+                t.sender.clone(),
+                recipients,
+                t.token.clone(),
+                0,
+                event_ledger,
+            );
+        });
+    }
+
+    #[test]
+    fn test_create_split_20_recipients_succeeds() {
+        let e = Env::default();
+        e.mock_all_auths();
+        let contract_id = e.register_contract(None, VeriTixPay);
+        let client = VeriTixPayClient::new(&e, &contract_id);
+        let sender = Address::generate(&e);
+        let token = e.register_stellar_asset_contract(sender.clone());
+        let token_admin = soroban_sdk::token::StellarAssetClient::new(&e, &token);
+        token_admin.mint(&sender, &10000);
+        client.initialize(&sender);
+
+        let event_ledger = e.ledger().sequence() + 1000;
+        let mut recipients_vec = soroban_sdk::Vec::new(&e);
+        for _ in 0..20 {
+            let recipient = Address::generate(&e);
+            recipients_vec.push_back((recipient.clone(), 500u32));
+        }
+        let split_id = e.as_contract(&contract_id, || {
+            crate::splitter::create_split(
+                e.clone(),
+                sender.clone(),
+                recipients_vec,
+                token.clone(),
+                1000,
+                event_ledger,
+            )
+        });
+        assert_eq!(split_id, 0);
+    }
+
+    #[test]
+    fn test_distribute_10_recipients_uneven_bps_no_stroop_lost() {
+        let e = Env::default();
+        e.mock_all_auths();
+        let contract_id = e.register_contract(None, VeriTixPay);
+        let client = VeriTixPayClient::new(&e, &contract_id);
+        let sender = Address::generate(&e);
+        let token = e.register_stellar_asset_contract(sender.clone());
+        let token_client = soroban_sdk::token::Client::new(&e, &token);
+        let token_admin = soroban_sdk::token::StellarAssetClient::new(&e, &token);
+        token_admin.mint(&sender, &10000);
+        client.initialize(&sender);
+
+        let event_ledger = e.ledger().sequence() + 1000;
+        let total: i128 = 999;
+        token_admin.mint(&sender, &total);
+        let mut recipients_vec = soroban_sdk::Vec::new(&e);
+        // Uneven shares: 10 recipients across varying bps that still sum to 10000.
+        let shares: [u32; 10] = [1234, 987, 1001, 876, 1100, 900, 999, 1002, 998, 903];
+        for s in shares {
+            let recipient = Address::generate(&e);
+            recipients_vec.push_back((recipient.clone(), s));
+        }
+        let split_id = e.as_contract(&contract_id, || {
+            crate::splitter::create_split(
+                e.clone(),
+                sender.clone(),
+                recipients_vec.clone(),
+                token.clone(),
+                total,
+                event_ledger,
+            )
+        });
+        e.as_contract(&contract_id, || {
+            crate::splitter::distribute_split(e.clone(), sender.clone(), split_id);
+        });
+
+        let mut total_received: i128 = 0;
+        for i in 0..recipients_vec.len() {
+            let (recipient, _) = recipients_vec.get(i).unwrap();
+            total_received += token_client.balance(&recipient);
+        }
+        assert_eq!(total_received, total);
+        assert_eq!(token_client.balance(&contract_id), 0);
     }
 }
