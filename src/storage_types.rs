@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address};
+use soroban_sdk::{contracttype, Address, String};
 
 /// Minimum escrow amount to prevent spam (1 XLM equivalent in token stroops)
 pub const MIN_ESCROW_AMOUNT: i128 = 10_000_000;
@@ -56,6 +56,7 @@ pub enum DataKey {
     HolderCount,
     Vesting(u32),
     HolderVestings(Address),
+    VestingCount,
     Version,
     BalanceOf(Address),
     Authorized(Address),
@@ -72,6 +73,7 @@ pub enum DataKey {
     SnapshotAt(Address),
     DisputeAppeal(u32),
     DisputeOpenedAt(u32),
+    InitializedAtLedger,
 }
 
 // Closes #570: per-depositor escrow count limit
@@ -103,4 +105,14 @@ pub struct ResolverStats {
     pub total_resolved: u32,
     pub for_beneficiary: u32,
     pub for_depositor: u32,
+}
+
+// #687: Single connectivity/identity view
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContractInfo {
+    pub version: String,
+    pub admin: Address,
+    pub is_paused: bool,
+    pub initialized_at_ledger: u32,
 }
