@@ -1,5 +1,5 @@
-use soroban_sdk::{Address, Env};
 use crate::storage_types::DataKey;
+use soroban_sdk::{Address, Env};
 
 pub const ADMIN_ACTIVATION_DELAY: u32 = 17280;
 
@@ -42,7 +42,7 @@ pub fn is_admin(e: &Env, caller: &Address) -> bool {
         .persistent()
         .get(&DataKey::Admin)
         .expect("admin not set");
-    
+
     admin == *caller
 }
 
@@ -91,9 +91,7 @@ pub fn accept_admin(e: &Env, new_admin: &Address) {
 
     new_admin.require_auth();
 
-    e.storage()
-        .persistent()
-        .set(&DataKey::Admin, new_admin);
+    e.storage().persistent().set(&DataKey::Admin, new_admin);
 
     let activation_ledger = e.ledger().sequence() + ADMIN_ACTIVATION_DELAY;
     e.storage()
@@ -121,5 +119,7 @@ pub fn read_clawback_cosigner(e: &Env) -> Option<Address> {
 
 pub fn set_clawback_cosigner(e: &Env, admin: &Address, cosigner: &Address) {
     check_admin(e, admin);
-    e.storage().persistent().set(&DataKey::ClawbackCosigner, cosigner);
+    e.storage()
+        .persistent()
+        .set(&DataKey::ClawbackCosigner, cosigner);
 }

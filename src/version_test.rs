@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod version_test {
-    use soroban_sdk::{Env, String};
     use crate::contract::VeriTixPayClient;
+    use soroban_sdk::{Env, String};
 
     #[test]
     fn test_version() {
