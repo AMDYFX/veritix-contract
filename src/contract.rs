@@ -675,6 +675,7 @@ pub trait VeriTixPayTrait {
     /// # Arguments
     /// - `e` — contract environment (auto-injected).
     fn is_paused(e: Env) -> bool;
+    fn contract_paused_for(e: Env) -> Option<u32>;
 
     // ── Permit / Nonce ────────────────────────────────────────────────────────
     /// Consumes the current nonce for `user`, replay-protecting subsequent
@@ -997,6 +998,8 @@ pub trait VeriTixPayTrait {
     /// # Panics
     /// - `no escrow found between the two addresses` if no shared escrow exists.
     fn escrow_between(e: Env, addr1: Address, addr2: Address) -> u32;
+
+    fn get_all_escrows_between(e: Env, depositor: Address, beneficiary: Address) -> Vec<u32>;
 
     /// Cancels up to 20 recurring payments in one call. The payer authenticates.
     ///
@@ -1715,6 +1718,10 @@ impl VeriTixPayTrait for VeriTixPay {
             .unwrap_or(false)
     }
 
+    fn contract_paused_for(e: Env) -> Option<u32> {
+        crate::pause::contract_paused_for(&e)
+    }
+
     // ── Permit / Nonce ────────────────────────────────────────────────────────
 
     fn permit(e: Env, user: Address, nonce: u32) {
@@ -1800,6 +1807,10 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn escrow_between(e: Env, addr1: Address, addr2: Address) -> u32 {
         escrow::escrow_between(e, addr1, addr2)
+    }
+
+    fn get_all_escrows_between(e: Env, depositor: Address, beneficiary: Address) -> Vec<u32> {
+        escrow::get_all_escrows_between(e, depositor, beneficiary)
     }
 
     fn cancel_recurring_batch(e: Env, caller: Address, recurring_ids: Vec<u32>) {
@@ -2345,10 +2356,7 @@ impl VeritixContract {
     /// A vector of [`RecurringExecution`] entries (empty if none recorded).
     pub fn get_recurring_history(e: Env, recurring_id: u32) -> Vec<RecurringExecution> {
         let key = DataKey::RecurringHistory(recurring_id);
-        e.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(&e))
+        e.storage().instance().get(&key).unwrap_or_else(|| Vec::new(&e))
     }
 
     /// Retrieves all recurring payment IDs associated with a specific payee address.
@@ -2361,10 +2369,7 @@ impl VeritixContract {
     /// A vector of recurring payment IDs (empty if none exist).
     pub fn get_recurring_by_payee(e: Env, payee: Address) -> Vec<u32> {
         let key = DataKey::PayeeRecurrings(payee);
-        e.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(&e))
+        e.storage().instance().get(&key).unwrap_or_else(|| Vec::new(&e))
     }
 
     /// Returns a boolean indicating whether a recurring payment schedule is currently active and not paused,

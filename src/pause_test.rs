@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::contract::{VeriTixPay, VeriTixPayClient};
-use soroban_sdk::{testutils::Address as _, Address, Env};
+use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Address, Env};
 
 struct TestEnv<'a> {
     e: Env,
@@ -103,4 +103,28 @@ fn test_unpause_re_allows_transfer() {
     t.client.set_paused(&t.admin, &false);
     t.client.transfer_from(&spender, &from, &to, &100);
     assert_eq!(t.client.balance(&to), 100);
+}
+
+// ── #739: contract_paused_for ─────────────────────────────────────────────────
+
+#[test]
+fn test_contract_paused_for_returns_none_when_not_paused() {
+    let t = setup();
+    assert_eq!(t.client.contract_paused_for(), None);
+}
+
+#[test]
+fn test_contract_paused_for_returns_ledgers_elapsed_since_pause() {
+    let t = setup();
+    t.client.set_paused(&t.admin, &true);
+    assert!(t.client.contract_paused_for().is_some());
+
+    // Advance the ledger and confirm the elapsed count grows.
+    let before = t.client.contract_paused_for().unwrap();
+    t.e.ledger().with_mut(|l| l.sequence_number += 5);
+    assert_eq!(t.client.contract_paused_for().unwrap(), before + 5);
+
+    // Unpausing resets the counter to None.
+    t.client.set_paused(&t.admin, &false);
+    assert_eq!(t.client.contract_paused_for(), None);
 }

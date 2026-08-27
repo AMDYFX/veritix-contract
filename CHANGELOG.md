@@ -16,6 +16,9 @@ for contract upgrades.
 
 ### Added
 
+- `contract_paused_for` view returning how many ledgers the contract has been paused (#739).
+- `get_all_escrows_between` view returning all escrow IDs (active and settled) between a depositor and beneficiary (#738).
+- Tests for `split_to_escrow` (#746) and `cancel_recurring_batch` (#737).
 - Pre-commit hook (`make install-hooks`) running `cargo fmt` and `cargo clippy` before every commit.
 - CHANGELOG.md tracking all significant changes per release.
 - Inline doc comments explaining the purpose of each test scenario across all test files.

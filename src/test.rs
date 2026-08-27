@@ -1302,3 +1302,141 @@ fn test_add_to_whitelist_signed_over_200_panics() {
     let signature = BytesN::from_array(&e, &[0u8; 64]);
     client.add_to_whitelist_signed(&admin, &addresses, &0u64, &public_key, &signature);
 }
+
+// ── #746: split_to_escrow tests ───────────────────────────────────────────────
+
+#[test]
+fn test_split_to_escrow_returns_correct_number_of_ids() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let sender = Address::generate(&e);
+    let token = create_token_contract(&e, &sender);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&sender, &10_000);
+
+    let recipient1 = Address::generate(&e);
+    let recipient2 = Address::generate(&e);
+    let recipient3 = Address::generate(&e);
+    let recipients = Vec::from_array(
+        &e,
+        [(recipient1, 5000u32), (recipient2, 3000u32), (recipient3, 2000u32)],
+    );
+    let expiry = e.ledger().sequence() + 1000;
+
+    let ids = client.split_to_escrow(&sender, &recipients, &token, &10_000, &expiry);
+    assert_eq!(ids.len(), 3);
+}
+
+#[test]
+fn test_split_to_escrow_supply_invariant() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let sender = Address::generate(&e);
+    let token = create_token_contract(&e, &sender);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    let token_client = token::Client::new(&e, &token);
+    token_admin.mint(&sender, &10_000);
+
+    let recipient1 = Address::generate(&e);
+    let recipient2 = Address::generate(&e);
+    let recipients = Vec::from_array(&e, [(recipient1, 7000u32), (recipient2, 3000u32)]);
+    let expiry = e.ledger().sequence() + 1000;
+
+    let ids = client.split_to_escrow(&sender, &recipients, &token, &10_000, &expiry);
+
+    // The full amount is pulled into the contract and split without loss.
+    assert_eq!(token_client.balance(&contract_id), 10_000);
+    assert_eq!(token_client.balance(&sender), 0);
+
+    let escrow1 = client.get_escrow(&ids.get(0).unwrap());
+    let escrow2 = client.get_escrow(&ids.get(1).unwrap());
+    assert_eq!(escrow1.amount + escrow2.amount, 10_000);
+}
+
+#[test]
+fn test_split_to_escrow_each_escrow_has_correct_amount() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let sender = Address::generate(&e);
+    let token = create_token_contract(&e, &sender);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&sender, &10_000);
+
+    let recipient1 = Address::generate(&e);
+    let recipient2 = Address::generate(&e);
+    let recipients = Vec::from_array(&e, [(recipient1, 6000u32), (recipient2, 4000u32)]);
+    let expiry = e.ledger().sequence() + 1000;
+
+    let ids = client.split_to_escrow(&sender, &recipients, &token, &10_000, &expiry);
+    assert_eq!(ids.len(), 2);
+    let escrow1 = client.get_escrow(&ids.get(0).unwrap());
+    let escrow2 = client.get_escrow(&ids.get(1).unwrap());
+    assert_eq!(escrow1.amount, 6000);
+    assert_eq!(escrow2.amount, 4000);
+}
+
+#[test]
+fn test_split_to_escrow_beneficiaries_match_recipients() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let sender = Address::generate(&e);
+    let token = create_token_contract(&e, &sender);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&sender, &10_000);
+
+    let recipient1 = Address::generate(&e);
+    let recipient2 = Address::generate(&e);
+    let recipients = Vec::from_array(&e, [(recipient1.clone(), 5000u32), (recipient2.clone(), 5000u32)]);
+    let expiry = e.ledger().sequence() + 1000;
+
+    let ids = client.split_to_escrow(&sender, &recipients, &token, &10_000, &expiry);
+    assert_eq!(ids.len(), 2);
+    let escrow1 = client.get_escrow(&ids.get(0).unwrap());
+    let escrow2 = client.get_escrow(&ids.get(1).unwrap());
+    assert_eq!(escrow1.beneficiary, recipient1);
+    assert_eq!(escrow2.beneficiary, recipient2);
+    assert_eq!(escrow1.depositor, sender);
+    assert_eq!(escrow2.depositor, sender);
+}
+
+#[test]
+#[should_panic(expected = "total basis points must equal 10000")]
+fn test_split_to_escrow_invalid_recipients_panics() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let sender = Address::generate(&e);
+    let token = create_token_contract(&e, &sender);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&sender, &10_000);
+
+    // Invalid: total basis points do not sum to 10000.
+    let recipient = Address::generate(&e);
+    let recipients = Vec::from_array(&e, [(recipient, 5000u32)]);
+    let expiry = e.ledger().sequence() + 1000;
+    client.split_to_escrow(&sender, &recipients, &token, &10_000, &expiry);
+}
