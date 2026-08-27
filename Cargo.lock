@@ -1659,6 +1659,7 @@ name = "veritix-contract"
 version = "0.0.0"
 dependencies = [
  "base64ct",
+ "ed25519-dalek",
  "soroban-sdk",
  "zeroize",
 ]
