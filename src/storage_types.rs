@@ -56,6 +56,7 @@ pub enum DataKey {
     HolderCount,
     Vesting(u32),
     HolderVestings(Address),
+    VestingCount,
     Version,
     BalanceOf(Address),
     Authorized(Address),

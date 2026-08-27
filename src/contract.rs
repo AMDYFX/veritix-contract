@@ -178,6 +178,7 @@ pub trait VeriTixPayTrait {
     fn escrow_between(e: Env, addr1: Address, addr2: Address) -> u32;
     fn cancel_recurring_batch(e: Env, caller: Address, recurring_ids: Vec<u32>);
     fn topup_escrow(e: Env, depositor: Address, escrow_id: u32, amount: i128);
+    fn create_vesting(e: Env, admin: Address, holder: Address, token: Address, amount: i128, vesting_ledger: u32) -> u32;
     fn claim_vesting(e: Env, holder: Address, vesting_id: u32);
     fn get_vesting_by_holder(e: Env, holder: Address) -> Vec<u32>;
     fn split_to_escrow(e: Env, sender: Address, recipients: Vec<(Address, u32)>, token: Address, total_amount: i128, expiry_ledger: u32) -> Vec<u32>;
@@ -634,6 +635,38 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn topup_escrow(e: Env, depositor: Address, escrow_id: u32, amount: i128) {
         escrow::topup_escrow(e, depositor, escrow_id, amount)
+    }
+
+    fn create_vesting(e: Env, admin: Address, holder: Address, token: Address, amount: i128, vesting_ledger: u32) -> u32 {
+        admin::check_admin(&e, &admin);
+        require_positive_amount(amount);
+        assert!(vesting_ledger > e.ledger().sequence(), "vesting ledger must be in the future");
+
+        // Lock the deposited tokens into the contract until the vesting date.
+        let token_client = soroban_sdk::token::Client::new(&e, &token);
+        token_client.transfer(&admin, &e.current_contract_address(), &amount);
+
+        let id: u32 = e.storage().persistent().get(&DataKey::VestingCount).unwrap_or(0) + 1;
+        e.storage().persistent().set(&DataKey::VestingCount, &id);
+
+        let record = VestingRecord {
+            id,
+            holder: holder.clone(),
+            token,
+            amount,
+            vesting_ledger,
+            claimed: false,
+        };
+        e.storage().persistent().set(&DataKey::Vesting(id), &record);
+
+        let mut holder_vestings: Vec<u32> = e.storage()
+            .persistent()
+            .get(&DataKey::HolderVestings(holder.clone()))
+            .unwrap_or_else(|| Vec::new(&e));
+        holder_vestings.push_back(id);
+        e.storage().persistent().set(&DataKey::HolderVestings(holder), &holder_vestings);
+
+        id
     }
 
     fn claim_vesting(e: Env, holder: Address, vesting_id: u32) {
