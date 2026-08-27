@@ -142,3 +142,13 @@ pub enum DataKey {
     // ... existing keys
     PayeeRecurrings(Address),
 }
+
+use soroban_sdk::{contracttype, Address};
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DataKey {
+    // ... existing keys
+    SplitProtocolFeeBps,
+    SplitProtocolTreasury,
+}
