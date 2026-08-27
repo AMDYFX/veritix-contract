@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, token, Address, Env, Vec};
 use crate::storage_types::{DataKey, RecurringPayment};
+use soroban_sdk::{contracttype, token, Address, Env, Vec};
 
 #[contracttype]
 #[derive(Clone)]
@@ -52,7 +52,11 @@ pub fn setup_recurring(
         .set(&DataKey::RecurringCount, &(id + 1));
 
     let index_key = DataKey::PayerRecurrings(record.payer.clone());
-    let mut payer_ids: Vec<u32> = e.storage().persistent().get(&index_key).unwrap_or(Vec::new(e));
+    let mut payer_ids: Vec<u32> = e
+        .storage()
+        .persistent()
+        .get(&index_key)
+        .unwrap_or(Vec::new(e));
     payer_ids.push_back(id);
     e.storage().persistent().set(&index_key, &payer_ids);
 
@@ -75,6 +79,8 @@ pub fn execute_recurring(e: &Env, recurring_id: u32) {
         .checked_add(record.interval)
         .expect("overflow");
     assert!(e.ledger().sequence() >= next_due, "not yet due");
+
+    record.payer.require_auth();
 
     let token_client = token::Client::new(e, &record.token);
     token_client.transfer(&record.payer, &record.payee, &record.amount);
@@ -112,29 +118,42 @@ pub fn get_recurring_history(e: Env, recurring_id: u32) -> Vec<RecurringPayment>
         .unwrap_or(Vec::new(&e))
 }
 
-pub fn amend_recurring(e: &Env, caller: &Address, recurring_id: u32, new_amount: i128, new_interval: u32) {
+pub fn amend_recurring(
+    e: &Env,
+    caller: &Address,
+    recurring_id: u32,
+    new_amount: i128,
+    new_interval: u32,
+) {
     caller.require_auth();
     assert!(new_amount > 0, "amount must be positive");
     assert!(new_interval > 0, "interval must be positive");
-    let mut record: RecurringRecord = e.storage().persistent()
+    let mut record: RecurringRecord = e
+        .storage()
+        .persistent()
         .get(&DataKey::Recurring(recurring_id))
         .expect("recurring not found");
     assert!(record.payer == *caller, "not the payer");
     assert!(record.active, "recurring is not active");
     record.amount = new_amount;
     record.interval = new_interval;
-    e.storage().persistent().set(&DataKey::Recurring(recurring_id), &record);
+    e.storage()
+        .persistent()
+        .set(&DataKey::Recurring(recurring_id), &record);
 }
 
 pub fn recurring_count_for_payee(e: Env, payee: Address) -> u32 {
-    let list: soroban_sdk::Vec<u32> = e.storage().persistent()
+    let list: soroban_sdk::Vec<u32> = e
+        .storage()
+        .persistent()
         .get(&DataKey::PayeeRecurrings(payee))
         .unwrap_or(soroban_sdk::Vec::new(&e));
     list.len()
 }
 
 pub fn recurring_ids_for_payee(e: Env, payee: Address) -> soroban_sdk::Vec<u32> {
-    e.storage().persistent()
+    e.storage()
+        .persistent()
         .get(&DataKey::PayeeRecurrings(payee))
         .unwrap_or(soroban_sdk::Vec::new(&e))
 }
@@ -144,13 +163,21 @@ pub fn cancel_recurring_batch(e: &Env, caller: &Address, recurring_ids: Vec<u32>
     assert!(recurring_ids.len() <= 20, "batch size cannot exceed 20");
     for i in 0..recurring_ids.len() {
         if let Some(id) = recurring_ids.get(i) {
-            let mut record: RecurringRecord = e.storage().persistent()
+            let mut record: RecurringRecord = e
+                .storage()
+                .persistent()
                 .get(&DataKey::Recurring(id))
                 .expect("recurring not found");
-            assert!(record.payer == *caller, "not the payer for recurring {}", id);
+            assert!(
+                record.payer == *caller,
+                "not the payer for recurring {}",
+                id
+            );
             assert!(record.active, "recurring {} is not active", id);
             record.active = false;
-            e.storage().persistent().set(&DataKey::Recurring(id), &record);
+            e.storage()
+                .persistent()
+                .set(&DataKey::Recurring(id), &record);
         }
     }
 }
@@ -165,7 +192,9 @@ pub fn cancel_recurring(e: &Env, caller: &Address, recurring_id: u32) {
     assert!(record.payer == *caller, "not the payer");
     assert!(record.active, "recurring is not active");
     record.active = false;
-    e.storage().persistent().set(&DataKey::Recurring(recurring_id), &record);
+    e.storage()
+        .persistent()
+        .set(&DataKey::Recurring(recurring_id), &record);
 
     let index_key = DataKey::PayerRecurrings(record.payer.clone());
     if let Some(ids) = e.storage().persistent().get::<_, Vec<u32>>(&index_key) {

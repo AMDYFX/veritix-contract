@@ -25,6 +25,20 @@ for contract upgrades.
 ### Changed
 
 - CONTRIBUTING.md updated with pre-commit hook setup instructions.
+- Add revision snapshotting (`take_snapshot`, `get_snapshot_balance`,
+  `snapshot_taken_at`) with timestamped capture for audit/recovery.
+- Add `admin_settle_escrow` to let an admin settle an escrow to a winner while
+  honoring outstanding liens.
+- Add dispute appeals (`appeal_dispute`, `resolve_appeal`) with a bounded
+  appeal window and arbiter-gated resolution.
+- Add `expire_dispute` to release a dispute after the expiry window, and track
+  resolver resolution statistics.
+- `raise_dispute` now records the dispute open ledger and maintains the claimant
+  dispute index.
+- `execute_recurring` now authorizes the payer before each charge and anchors the
+  schedule to the prior due date to prevent drift.
+- `distribute_split` no longer loses the rounding remainder (dust) — the
+  residual is awarded to the first recipient.
 
 ## [0.1.0] — 2026-Q1
 

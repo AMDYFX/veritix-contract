@@ -69,6 +69,10 @@ pub enum DataKey {
     Nonce(Address),
     PayerRecurrings(Address),
     ClawbackCosigner,
+    Snapshot(Address),
+    SnapshotAt(Address),
+    DisputeAppeal(u32),
+    DisputeOpenedAt(u32),
     InitializedAtLedger,
 }
 

@@ -1,6 +1,9 @@
-use soroban_sdk::{testutils::{Address as _, Ledger}, Address, Bytes, Env, token, Vec};
 use crate::contract::{VeriTixPay, VeriTixPayClient};
 use crate::storage_types::MIN_ESCROW_AMOUNT;
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    token, Address, Bytes, Env, Vec,
+};
 
 pub fn create_token_contract(e: &Env, admin: &Address) -> Address {
     e.register_stellar_asset_contract(admin.clone())
@@ -14,7 +17,7 @@ fn test_emergency_withdraw() {
     // Setup contract and admin
     let contract_id = e.register_contract(None, VeriTixPay);
     let client = VeriTixPayClient::new(&e, &contract_id);
-    
+
     let admin = Address::generate(&e);
     client.initialize(&admin);
 
@@ -22,20 +25,20 @@ fn test_emergency_withdraw() {
     let token = create_token_contract(&e, &admin);
     let token_admin_client = token::StellarAssetClient::new(&e, &token);
     let token_client = token::Client::new(&e, &token);
-    
+
     // Mint 1000 tokens directly to the contract (stranded funds)
     token_admin_client.mint(&contract_id, &1000);
-    
+
     // Create a recipient to receive the withdrawn funds
     let recipient = Address::generate(&e);
-    
+
     // Verify contract has 1000 tokens, total escrowed is 0
     assert_eq!(token_client.balance(&contract_id), 1000);
     assert_eq!(client.escrowed_total(), 0);
-    
+
     // Withdraw the stranded funds
     client.emergency_withdraw(&admin, &recipient, &token, &1000);
-    
+
     // Verify recipient received the funds, contract has 0 left
     assert_eq!(token_client.balance(&recipient), 1000);
     assert_eq!(token_client.balance(&contract_id), 0);
@@ -50,7 +53,7 @@ fn test_emergency_withdraw_cannot_touch_escrow_funds() {
     // Setup contract and admin
     let contract_id = e.register_contract(None, VeriTixPay);
     let client = VeriTixPayClient::new(&e, &contract_id);
-    
+
     let admin = Address::generate(&e);
     client.initialize(&admin);
 
@@ -59,20 +62,25 @@ fn test_emergency_withdraw_cannot_touch_escrow_funds() {
     let token = create_token_contract(&e, &depositor);
     let token_admin_client = token::StellarAssetClient::new(&e, &token);
     let token_client = token::Client::new(&e, &token);
-    
+
     token_admin_client.mint(&depositor, &1000);
-    
+
     // Create an escrow which locks 500 tokens in the contract
     let beneficiary = Address::generate(&e);
     let expiry = e.ledger().sequence() + 1000;
     let _id = client.create_escrow(
-        &depositor, &beneficiary, &token, &500, &expiry, &soroban_sdk::Bytes::new(&e)
+        &depositor,
+        &beneficiary,
+        &token,
+        &500,
+        &expiry,
+        &soroban_sdk::Bytes::new(&e),
     );
-    
+
     // Verify contract has 500 tokens in escrow
     assert_eq!(token_client.balance(&contract_id), 500);
     assert_eq!(client.escrowed_total(), 500);
-    
+
     // Try to withdraw 501 tokens - should panic because only 0 non-escrowed funds exist
     let recipient = Address::generate(&e);
     client.emergency_withdraw(&admin, &recipient, &token, &501);
@@ -118,7 +126,12 @@ fn test_full_governance_lifecycle() {
     let memo = Bytes::new(&e);
 
     let escrow_id = client.create_escrow(
-        &admin_a, &beneficiary, &token, &MIN_ESCROW_AMOUNT, &expiry, &memo,
+        &admin_a,
+        &beneficiary,
+        &token,
+        &MIN_ESCROW_AMOUNT,
+        &expiry,
+        &memo,
     );
     assert_eq!(escrow_id, 0);
     assert_eq!(client.escrowed_total(), MIN_ESCROW_AMOUNT);
@@ -145,12 +158,18 @@ fn test_full_governance_lifecycle() {
     let activation_ledger = client.admin_active_after_ledger();
     assert!(activation_ledger > e.ledger().sequence());
 
-    e.ledger().with_mut(|l| l.sequence_number = activation_ledger + 1);
+    e.ledger()
+        .with_mut(|l| l.sequence_number = activation_ledger + 1);
 
     token_admin.mint(&admin_b, &(5 * MIN_ESCROW_AMOUNT));
 
     let escrow_id2 = client.create_escrow(
-        &admin_b, &beneficiary, &token, &MIN_ESCROW_AMOUNT, &expiry, &memo,
+        &admin_b,
+        &beneficiary,
+        &token,
+        &MIN_ESCROW_AMOUNT,
+        &expiry,
+        &memo,
     );
     assert_eq!(escrow_id2, 1);
 
@@ -278,7 +297,8 @@ fn test_balance_key_without_bump_expires_and_returns_zero() {
     assert_eq!(client.balance(&user), 1000);
 
     e.ledger().with_mut(|l| {
-        l.sequence_number = l.sequence_number + crate::storage_types::BALANCE_LIFETIME_THRESHOLD + 1;
+        l.sequence_number =
+            l.sequence_number + crate::storage_types::BALANCE_LIFETIME_THRESHOLD + 1;
     });
 
     let bal = client.balance(&user);
@@ -302,15 +322,19 @@ fn test_escrow_record_expiry_simulation() {
 
     let expiry = e.ledger().sequence() + 1000;
     let id = client.create_escrow(
-        &depositor, &beneficiary, &token, &500, &expiry, &soroban_sdk::Bytes::new(&e),
+        &depositor,
+        &beneficiary,
+        &token,
+        &500,
+        &expiry,
+        &soroban_sdk::Bytes::new(&e),
     );
 
     e.ledger().with_mut(|l| {
         l.sequence_number = l.sequence_number + crate::storage_types::ESCROW_LIFETIME_THRESHOLD + 1;
     });
 
-    let settled = client.is_escrow_settled(&id);
-    assert!(settled == true || settled == false);
+    let _settled = client.is_escrow_settled(&id);
 }
 
 #[test]
@@ -328,12 +352,16 @@ fn test_allowance_expiry_simulation() {
     let expiry_ledger = e.ledger().sequence() + 100;
     client.approve(&from, &spender, &500, &expiry_ledger);
 
-    e.ledger().with_mut(|l| l.sequence_number = expiry_ledger + 1);
+    e.ledger()
+        .with_mut(|l| l.sequence_number = expiry_ledger + 1);
 
-    let allowance_exists = e.storage().persistent().has(
-        &crate::storage_types::DataKey::Allowance(from.clone(), spender.clone())
-    );
-    assert!(allowance_exists == true || allowance_exists == false);
+    let _allowance_exists =
+        e.storage()
+            .persistent()
+            .has(&crate::storage_types::DataKey::Allowance(
+                from.clone(),
+                spender.clone(),
+            ));
 }
 
 #[test]
@@ -353,6 +381,55 @@ fn test_total_supply_invariant_across_mint_and_burn() {
     assert_eq!(client.total_supply(), 600);
 }
 
+// ── #679: Full contract lifecycle ─────────────────────────────────────────────
+
+#[test]
+fn test_full_contract_lifecycle() {
+    let e = Env::default();
+    e.mock_all_auths();
+    e.ledger().with_mut(|l| l.sequence_number = 100);
+
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+
+    // Initialize once
+    let admin = Address::generate(&e);
+    let user = Address::generate(&e);
+    client.initialize(&admin);
+
+    // Contract is live: balances, pauses, snapshots work.
+    client.mint(&admin, &user, &1000);
+    assert_eq!(client.balance(&user), 1000);
+    assert_eq!(client.total_supply(), 1000);
+
+    client.take_snapshot(&admin, &user);
+    assert_eq!(client.get_snapshot_balance(&user), 1000);
+    assert_eq!(client.snapshot_taken_at(&user), e.ledger().sequence());
+
+    client.set_paused(&admin, &true);
+    assert!(client.is_paused());
+    client.set_paused(&admin, &false);
+    assert!(!client.is_paused());
+
+    // Two-phase ownership transfer completes the handoff.
+    let new_admin = Address::generate(&e);
+    client.transfer_ownership(&new_admin);
+    client.accept_admin(&new_admin);
+    let activation = client.admin_active_after_ledger();
+    e.ledger().with_mut(|l| l.sequence_number = activation + 1);
+
+    client.mint(&new_admin, &user, &500);
+    assert_eq!(client.balance(&user), 1500);
+
+    // Funds remain intact through the owned lifecycle.
+    client.burn(&user, &300);
+    assert_eq!(client.balance(&user), 1200);
+    assert_eq!(client.total_supply(), 1200);
+}
+
+#[test]
+#[should_panic(expected = "AlreadyInitialized: contract state is locked")]
+fn test_initialize_twice_panics() {
 // ── #680: Supply invariant across 1000 deterministic transfers ────────────────
 
 #[test]
@@ -439,6 +516,8 @@ fn test_get_contract_info_reflects_pause_state() {
     let client = VeriTixPayClient::new(&e, &contract_id);
     let admin = Address::generate(&e);
     client.initialize(&admin);
+    client.initialize(&admin);
+}
 
     let token = create_token_contract(&e, &admin);
     let token_admin = token::StellarAssetClient::new(&e, &token);
