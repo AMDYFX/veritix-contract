@@ -1199,3 +1199,21 @@ impl VeriTixPayTrait for VeriTixPay {
         escrow::trigger_auto_release(e, escrow_id)
     }
 }
+
+use soroban_sdk::{contract, contractimpl, Env, Vec};
+use crate::storage_types::RecurringExecution;
+
+#[contract]
+pub struct VeritixContract;
+
+#[contractimpl]
+impl VeritixContract {
+    /// Retrieves the execution audit log for a specific recurring payment schedule.
+    pub fn get_recurring_history(e: Env, recurring_id: u32) -> Vec<RecurringExecution> {
+        let key = DataKey::RecurringHistory(recurring_id);
+        e.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(&e))
+    }
+}

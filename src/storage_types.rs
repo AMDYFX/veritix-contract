@@ -116,3 +116,20 @@ pub struct ContractInfo {
     pub is_paused: bool,
     pub initialized_at_ledger: u32,
 }
+
+use soroban_sdk::{contracttype, Address};
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecurringExecution {
+    pub recurring_id: u32,
+    pub execution_ledger: u32,
+    pub amount: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DataKey {
+    // ... existing keys
+    RecurringHistory(u32),
+}

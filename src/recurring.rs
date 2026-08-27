@@ -247,3 +247,25 @@ pub fn get_recurring_by_payer(e: &Env, payer: &Address) -> Vec<u32> {
         .get(&DataKey::PayerRecurrings(payer.clone()))
         .unwrap_or(Vec::new(e))
 }
+
+use soroban_sdk::{Env, Vec};
+use crate::storage_types::{DataKey, RecurringExecution};
+
+pub fn record_execution(e: &Env, recurring_id: u32, amount: i128) {
+    let ledger = e.ledger().sequence();
+    let execution = RecurringExecution {
+        recurring_id,
+        execution_ledger: ledger,
+        amount,
+    };
+
+    let key = DataKey::RecurringHistory(recurring_id);
+    let mut history: Vec<RecurringExecution> = e
+        .storage()
+        .instance()
+        .get(&key)
+        .unwrap_or_else(|| Vec::new(e));
+
+    history.push_back(execution);
+    e.storage().instance().set(&key, &history);
+}

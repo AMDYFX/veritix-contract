@@ -295,3 +295,29 @@ fn test_resume_recurring_non_payer_panics() {
     // A non-payer caller must not be able to resume another payer's recurring payment.
     client.resume_recurring(&intruder, &id);
 }
+
+#[cfg(test)]
+mod recurring_history_tests {
+    use super::*;
+    use soroban_sdk::Env;
+
+    #[test]
+    fn test_recurring_execution_audit_log() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let recurring_id = 1;
+        let amount = 5000_i128;
+
+        // Record a successful execution
+        record_execution(&env, recurring_id, amount);
+
+        // Fetch history via contract view
+        let history = VeritixContract::get_recurring_history(env.clone(), recurring_id);
+        
+        assert_eq!(history.len(), 1);
+        let execution = history.get(0).unwrap();
+        assert_eq!(execution.recurring_id, recurring_id);
+        assert_eq!(execution.amount, amount);
+    }
+}
