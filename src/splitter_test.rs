@@ -517,3 +517,27 @@ mod tests {
         assert_eq!(token_client.balance(&contract_id), 0);
     }
 }
+
+#[cfg(test)]
+mod splitter_sender_tests {
+    use super::*;
+    use soroban_sdk::Env;
+
+    #[test]
+    fn test_get_splits_by_sender_indexing() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let sender = Address::generate(&env);
+        let split_id = 7;
+
+        // Index the split for the sender
+        crate::splitter::index_split_for_sender(&env, &sender, split_id);
+
+        // Fetch split IDs via contract view
+        let sender_splits = VeritixContract::get_splits_by_sender(env.clone(), sender);
+        
+        assert_eq!(sender_splits.len(), 1);
+        assert_eq!(sender_splits.get(0).unwrap(), split_id);
+    }
+}

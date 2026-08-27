@@ -1199,3 +1199,21 @@ impl VeriTixPayTrait for VeriTixPay {
         escrow::trigger_auto_release(e, escrow_id)
     }
 }
+
+use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
+use crate::storage_types::DataKey;
+
+#[contract]
+pub struct VeritixContract;
+
+#[contractimpl]
+impl VeritixContract {
+    /// Retrieves all split payment IDs created by a specific sender address.
+    pub fn get_splits_by_sender(e: Env, sender: Address) -> Vec<u32> {
+        let key = DataKey::SenderSplits(sender);
+        e.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(&e))
+    }
+}

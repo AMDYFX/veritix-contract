@@ -116,3 +116,12 @@ pub struct ContractInfo {
     pub is_paused: bool,
     pub initialized_at_ledger: u32,
 }
+
+use soroban_sdk::{contracttype, Address};
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DataKey {
+    // ... existing keys
+    SenderSplits(Address),
+}
