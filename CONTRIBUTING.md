@@ -2,7 +2,7 @@
 
 Welcome, and thank you for your interest in contributing! Veritix Contracts is an open-source Soroban smart contract project and we are actively looking for contributors to help build it out. This project is part of an active open-source funding wave on [Drips Network](https://www.drips.network/) — contributors who ship meaningful features are part of something real.
 
-Whether you are new to Soroban or an experienced Rust developer, there is a place for you here. Read through this guide, pick up an issue, and start building.
+Whether you are new to Soroban or an experienced Rust developer, there is a place for you here. Read through this guide, pick up an issue, and start building..
 
 ---
 
