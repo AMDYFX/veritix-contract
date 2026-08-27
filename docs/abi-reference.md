@@ -48,6 +48,17 @@ This reference documents callable functions in `veritixpay/contract/token/src/co
 - `resolve_dispute(resolver: Address, dispute_id: u32, release_to_beneficiary: bool) -> ()`
 - `get_dispute(dispute_id: u32) -> DisputeRecord`
 - `dispute_count() -> u32`
+- `raise_dispute(caller: Address, escrow_id: u32) -> ()`
+- `appeal_dispute(caller: Address, escrow_id: u32) -> ()`
+- `resolve_appeal(resolver: Address, escrow_id: u32, winner: Address) -> ()`
+- `expire_dispute(caller: Address, escrow_id: u32) -> ()`
+- `get_disputes_by_claimant(claimant: Address) -> Vec<u32>`
+- `resolver_stats(resolver: Address) -> ResolverStats`
+
+## Snapshot
+- `take_snapshot(admin: Address, account: Address) -> ()`
+- `get_snapshot_balance(account: Address) -> i128`
+- `snapshot_taken_at(account: Address) -> u32`
 
 ## Splitter
 - `create_split(sender: Address, recipients: Vec<SplitRecipient>, total_amount: i128) -> u32`

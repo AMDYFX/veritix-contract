@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use soroban_sdk::{testutils::Address as _, Address, Env};
     use crate::contract::{VeriTixPay, VeriTixPayClient};
+    use soroban_sdk::{testutils::Address as _, Address, Env};
 
     #[test]
     fn test_balance_edge_cases() {

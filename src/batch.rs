@@ -30,14 +30,10 @@ pub fn mint_batch(e: &Env, admin: Address, mints: Vec<(Address, i128)>) -> i128 
         let (to, amount) = mints.get(i).unwrap();
         crate::balance::receive_balance(e, &to, amount);
         total += amount;
-        e.events().publish(
-            (symbol_short!("mint"), admin.clone(), to.clone()),
-            amount,
-        );
+        e.events()
+            .publish((symbol_short!("mint"), admin.clone(), to.clone()), amount);
     }
-    e.events().publish(
-        (symbol_short!("btch_mnt"), admin.clone()),
-        total,
-    );
+    e.events()
+        .publish((symbol_short!("btch_mnt"), admin.clone()), total);
     total
 }

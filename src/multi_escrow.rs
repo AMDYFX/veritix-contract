@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, Address, Env, Vec};
 use crate::storage_types::DataKey;
+use soroban_sdk::{contracttype, Address, Env, Vec};
 
 #[contracttype]
 #[derive(Clone)]
@@ -55,11 +55,7 @@ pub fn create_multi_escrow(
 
     // Transfer total from depositor into contract
     let token_client = soroban_sdk::token::Client::new(&e, &token);
-    token_client.transfer(
-        &depositor,
-        &e.current_contract_address(),
-        &total_amount,
-    );
+    token_client.transfer(&depositor, &e.current_contract_address(), &total_amount);
 
     let record = MultiEscrowRecord {
         id,

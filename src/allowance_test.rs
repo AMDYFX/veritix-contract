@@ -1,9 +1,12 @@
 #![cfg(test)]
 
-use soroban_sdk::{testutils::{Address as _, Ledger as _}, Address, Env};
-use crate::test::create_token_contract;
-use crate::storage_types::DataKey;
 use crate::contract::VeriTixPay;
+use crate::storage_types::DataKey;
+use crate::test::create_token_contract;
+use soroban_sdk::{
+    testutils::{Address as _, Ledger as _},
+    Address, Env,
+};
 
 #[test]
 fn test_allowance_valid_at_expiry_ledger() {
@@ -103,13 +106,19 @@ fn test_read_allowance_prunes_expired_entry() {
 
     e.as_contract(&contract_id, || {
         crate::allowance::create_allowance(&e, &from, &spender, 500, 10);
-        assert_eq!(crate::allowance::get_allowances_for_spender(&e, &from).len(), 1);
+        assert_eq!(
+            crate::allowance::get_allowances_for_spender(&e, &from).len(),
+            1
+        );
 
         e.ledger().with_mut(|l| l.sequence_number = 20);
 
         let allowance = crate::allowance::read_allowance(&e, &from, &spender);
         assert_eq!(allowance.amount, 0);
-        assert_eq!(crate::allowance::get_allowances_for_spender(&e, &from).len(), 0);
+        assert_eq!(
+            crate::allowance::get_allowances_for_spender(&e, &from).len(),
+            0
+        );
     });
 }
 
@@ -125,9 +134,111 @@ fn test_write_allowance_zero_removes_key() {
 
     e.as_contract(&contract_id, || {
         crate::allowance::write_allowance(&e, &from, &spender, 500, 100);
-        assert_eq!(crate::allowance::get_allowances_for_spender(&e, &from).len(), 1);
+        assert_eq!(
+            crate::allowance::get_allowances_for_spender(&e, &from).len(),
+            1
+        );
 
         crate::allowance::write_allowance(&e, &from, &spender, 0, 100);
-        assert_eq!(crate::allowance::get_allowances_for_spender(&e, &from).len(), 0);
+        assert_eq!(
+            crate::allowance::get_allowances_for_spender(&e, &from).len(),
+            0
+        );
+    });
+}
+
+// ── FIX #656: allowance edge cases ────────────────────────────────────────────
+
+#[test]
+fn test_spend_allowance_at_exact_amount_removes_key() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, VeriTixPay);
+
+    let from = Address::generate(&e);
+    let spender = Address::generate(&e);
+
+    e.as_contract(&contract_id, || {
+        crate::allowance::write_allowance(&e, &from, &spender, 500, 100);
+
+        // Spend the exact remaining amount
+        crate::allowance::spend_allowance(&e, &from, &spender, 500);
+
+        // Allowance key should be removed, spender dropped from index
+        assert_eq!(
+            crate::allowance::get_allowances_for_spender(&e, &from).len(),
+            0
+        );
+        let allowance = crate::allowance::read_allowance(&e, &from, &spender);
+        assert_eq!(allowance.amount, 0);
+    });
+}
+
+#[test]
+fn test_revoke_all_allowances_clears_all_spenders() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, VeriTixPay);
+
+    let from = Address::generate(&e);
+    let spender1 = Address::generate(&e);
+    let spender2 = Address::generate(&e);
+    let spender3 = Address::generate(&e);
+
+    e.as_contract(&contract_id, || {
+        crate::allowance::create_allowance(&e, &from, &spender1, 100, 100);
+        crate::allowance::create_allowance(&e, &from, &spender2, 200, 100);
+        crate::allowance::create_allowance(&e, &from, &spender3, 300, 100);
+        assert_eq!(
+            crate::allowance::get_allowances_for_spender(&e, &from).len(),
+            3
+        );
+
+        crate::allowance::revoke_all_allowances(&e, &from);
+
+        assert_eq!(
+            crate::allowance::get_allowances_for_spender(&e, &from).len(),
+            0
+        );
+        assert_eq!(
+            crate::allowance::read_allowance(&e, &from, &spender1).amount,
+            0
+        );
+        assert_eq!(
+            crate::allowance::read_allowance(&e, &from, &spender2).amount,
+            0
+        );
+        assert_eq!(
+            crate::allowance::read_allowance(&e, &from, &spender3).amount,
+            0
+        );
+    });
+}
+
+#[test]
+fn test_owner_allowance_index_update() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, VeriTixPay);
+
+    let from = Address::generate(&e);
+    let spender1 = Address::generate(&e);
+    let spender2 = Address::generate(&e);
+
+    e.as_contract(&contract_id, || {
+        crate::allowance::create_allowance(&e, &from, &spender1, 100, 100);
+        crate::allowance::create_allowance(&e, &from, &spender2, 200, 100);
+
+        let spenders = crate::allowance::get_allowances_for_spender(&e, &from);
+        assert_eq!(spenders.len(), 2);
+
+        // Removing spender1 (write amount 0) should drop it from the index
+        crate::allowance::write_allowance(&e, &from, &spender1, 0, 100);
+        let spenders = crate::allowance::get_allowances_for_spender(&e, &from);
+        assert_eq!(spenders.len(), 1);
+        assert_eq!(spenders.get(0).unwrap(), spender2);
     });
 }
