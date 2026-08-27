@@ -133,3 +133,12 @@ pub enum DataKey {
     // ... existing keys
     RecurringHistory(u32),
 }
+
+use soroban_sdk::{contracttype, Address};
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DataKey {
+    // ... existing keys
+    PayeeRecurrings(Address),
+}

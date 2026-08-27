@@ -321,3 +321,31 @@ mod recurring_history_tests {
         assert_eq!(execution.amount, amount);
     }
 }
+#[cfg(test)]
+mod payee_recurring_tests {
+    use super::*;
+    use soroban_sdk::Env;
+
+    #[test]
+    fn test_get_recurring_by_payee_indexing() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let payee = Address::generate(&env);
+        let recurring_id = 42;
+
+        // Index the recurring payment for the payee
+        index_recurring_for_payee(&env, &payee, recurring_id);
+
+        // Fetch recurring IDs via contract view
+        let payee_recurrings = VeritixContract::get_recurring_by_payee(env.clone(), payee.clone());
+        
+        assert_eq!(payee_recurrings.len(), 1);
+        assert_eq!(payee_recurrings.get(0).unwrap(), recurring_id);
+
+        // Remove recurring payment and verify index update
+        remove_recurring_for_payee(&env, &payee, recurring_id);
+        let updated_recurrings = VeritixContract::get_recurring_by_payee(env, payee);
+        assert_eq!(updated_recurrings.len(), 0);
+    }
+}

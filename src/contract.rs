@@ -1217,3 +1217,21 @@ impl VeritixContract {
             .unwrap_or_else(|| Vec::new(&e))
     }
 }
+
+use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
+use crate::storage_types::DataKey;
+
+#[contract]
+pub struct VeritixContract;
+
+#[contractimpl]
+impl VeritixContract {
+    /// Retrieves all recurring payment IDs associated with a specific payee address.
+    pub fn get_recurring_by_payee(e: Env, payee: Address) -> Vec<u32> {
+        let key = DataKey::PayeeRecurrings(payee);
+        e.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(&e))
+    }
+}
