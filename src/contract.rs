@@ -1,4 +1,7 @@
 use crate::storage_types::{DataKey, RecurringPayment, ResolverStats, VestingRecord};
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Bytes, BytesN, Env, String, Vec};
+use crate::{escrow, multi_escrow, allowance, admin, dispute, recurring, balance, whitelist, permit};
+use crate::storage_types::{DataKey, RecurringPayment, ResolverStats, VestingRecord, ContractInfo};
 use crate::validation::require_positive_amount;
 use crate::{
     admin, allowance, balance, dispute, escrow, multi_escrow, permit, recurring, snapshot,
@@ -77,6 +80,7 @@ pub trait VeriTixPayTrait {
     fn set_arbiter(e: Env, arbiter: Address);
     fn raise_dispute(e: Env, caller: Address, escrow_id: u32);
     fn resolve_dispute(e: Env, resolver: Address, escrow_id: u32, winner: Address);
+    fn is_dispute_open(e: Env, escrow_id: u32) -> bool;
 
     // ── Recurring Payments ────────────────────────────────────────────────────
     fn setup_recurring(
@@ -174,6 +178,7 @@ pub trait VeriTixPayTrait {
     fn get_holders(e: Env) -> Vec<Address>;
     fn set_mediation_fee(e: Env, admin: Address, fee_bps: u32);
     fn version(e: Env) -> soroban_sdk::String;
+    fn get_contract_info(e: Env) -> ContractInfo;
     fn contract_summary(e: Env) -> ContractSummary;
     fn spendable_balance(e: Env, account: Address) -> i128;
     fn set_authorized(e: Env, admin: Address, account: Address, authorized: bool);
@@ -192,6 +197,7 @@ pub trait VeriTixPayTrait {
     fn escrow_between(e: Env, addr1: Address, addr2: Address) -> u32;
     fn cancel_recurring_batch(e: Env, caller: Address, recurring_ids: Vec<u32>);
     fn topup_escrow(e: Env, depositor: Address, escrow_id: u32, amount: i128);
+    fn create_vesting(e: Env, admin: Address, holder: Address, token: Address, amount: i128, vesting_ledger: u32) -> u32;
     fn claim_vesting(e: Env, holder: Address, vesting_id: u32);
     fn get_vesting_by_holder(e: Env, holder: Address) -> Vec<u32>;
     fn split_to_escrow(
@@ -230,6 +236,8 @@ pub trait VeriTixPayTrait {
     fn appeal_dispute(e: Env, caller: Address, escrow_id: u32);
     fn resolve_appeal(e: Env, resolver: Address, escrow_id: u32, winner: Address);
     fn expire_dispute(e: Env, caller: Address, escrow_id: u32);
+    fn pause_recurring(e: Env, caller: Address, recurring_id: u32);
+    fn resume_recurring(e: Env, caller: Address, recurring_id: u32);
 }
 
 #[contracttype]
@@ -254,6 +262,9 @@ impl VeriTixPayTrait for VeriTixPay {
         }
 
         env.storage().persistent().set(&DataKey::Admin, &admin);
+        env.storage()
+            .persistent()
+            .set(&DataKey::InitializedAtLedger, &env.ledger().sequence());
     }
 
     fn initialize_with_max_supply(env: Env, admin: Address, max_supply: i128) {
@@ -267,6 +278,10 @@ impl VeriTixPayTrait for VeriTixPay {
         env.storage()
             .persistent()
             .set(&DataKey::MaxSupply, &max_supply);
+        env.storage().persistent().set(&DataKey::MaxSupply, &max_supply);
+        env.storage()
+            .persistent()
+            .set(&DataKey::InitializedAtLedger, &env.ledger().sequence());
     }
 
     // ── SEP-41 Token Interface ────────────────────────────────────────────────
@@ -425,6 +440,12 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn resolve_dispute(e: Env, resolver: Address, escrow_id: u32, winner: Address) {
         dispute::resolve_dispute(&e, &resolver, escrow_id, &winner)
+    }
+
+    fn is_dispute_open(e: Env, escrow_id: u32) -> bool {
+        e.storage()
+            .persistent()
+            .has(&DataKey::EscrowDispute(escrow_id))
     }
 
     fn setup_recurring(
@@ -747,10 +768,48 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn expire_dispute(e: Env, caller: Address, escrow_id: u32) {
         dispute::expire_dispute(&e, &caller, escrow_id)
+    fn pause_recurring(e: Env, caller: Address, recurring_id: u32) {
+        recurring::pause_recurring(&e, &caller, recurring_id)
+    }
+
+    fn resume_recurring(e: Env, caller: Address, recurring_id: u32) {
+        recurring::resume_recurring(&e, &caller, recurring_id)
     }
 
     fn topup_escrow(e: Env, depositor: Address, escrow_id: u32, amount: i128) {
         escrow::topup_escrow(e, depositor, escrow_id, amount)
+    }
+
+    fn create_vesting(e: Env, admin: Address, holder: Address, token: Address, amount: i128, vesting_ledger: u32) -> u32 {
+        admin::check_admin(&e, &admin);
+        require_positive_amount(amount);
+        assert!(vesting_ledger > e.ledger().sequence(), "vesting ledger must be in the future");
+
+        // Lock the deposited tokens into the contract until the vesting date.
+        let token_client = soroban_sdk::token::Client::new(&e, &token);
+        token_client.transfer(&admin, &e.current_contract_address(), &amount);
+
+        let id: u32 = e.storage().persistent().get(&DataKey::VestingCount).unwrap_or(0) + 1;
+        e.storage().persistent().set(&DataKey::VestingCount, &id);
+
+        let record = VestingRecord {
+            id,
+            holder: holder.clone(),
+            token,
+            amount,
+            vesting_ledger,
+            claimed: false,
+        };
+        e.storage().persistent().set(&DataKey::Vesting(id), &record);
+
+        let mut holder_vestings: Vec<u32> = e.storage()
+            .persistent()
+            .get(&DataKey::HolderVestings(holder.clone()))
+            .unwrap_or_else(|| Vec::new(&e));
+        holder_vestings.push_back(id);
+        e.storage().persistent().set(&DataKey::HolderVestings(holder), &holder_vestings);
+
+        id
     }
 
     fn claim_vesting(e: Env, holder: Address, vesting_id: u32) {
@@ -804,6 +863,17 @@ impl VeriTixPayTrait for VeriTixPay {
             .persistent()
             .get(&DataKey::Version)
             .unwrap_or(String::from_str(&e, "1.0.0"))
+    }
+
+    fn get_contract_info(e: Env) -> ContractInfo {
+        let version: soroban_sdk::String =
+            e.storage().persistent().get(&DataKey::Version).unwrap_or(String::from_str(&e, "1.0.0"));
+        let admin: Address = e.storage().persistent().get(&DataKey::Admin).expect("admin not set");
+        let is_paused: bool =
+            e.storage().persistent().get(&DataKey::Paused).unwrap_or(false);
+        let initialized_at_ledger: u32 =
+            e.storage().persistent().get(&DataKey::InitializedAtLedger).unwrap_or(0);
+        ContractInfo { version, admin, is_paused, initialized_at_ledger }
     }
 
     fn contract_summary(e: Env) -> ContractSummary {
