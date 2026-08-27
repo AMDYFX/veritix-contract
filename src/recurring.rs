@@ -60,6 +60,16 @@ pub fn setup_recurring(
     payer_ids.push_back(id);
     e.storage().persistent().set(&index_key, &payer_ids);
 
+    // #732: emit a setup event for off-chain indexers
+    e.events().publish(
+        (
+            soroban_sdk::symbol_short!("rcr_set"),
+            record.payer.clone(),
+            record.payee.clone(),
+        ),
+        (id, record.amount),
+    );
+
     id
 }
 
@@ -96,6 +106,16 @@ pub fn execute_recurring(e: &Env, recurring_id: u32) {
     e.storage()
         .persistent()
         .set(&DataKey::Recurring(recurring_id), &record);
+
+    // #732: emit an execution event for off-chain indexers
+    e.events().publish(
+        (
+            soroban_sdk::symbol_short!("rcr_exec"),
+            record.payer.clone(),
+            record.payee.clone(),
+        ),
+        (recurring_id, record.amount),
+    );
 }
 
 pub fn record_recurring_execution(e: Env, caller: Address, recurring_id: u32, amount: i128) {
@@ -207,6 +227,12 @@ pub fn cancel_recurring(e: &Env, caller: &Address, recurring_id: u32) {
         }
         e.storage().persistent().set(&index_key, &updated);
     }
+
+    // #732: emit a cancel event for off-chain indexers
+    e.events().publish(
+        (soroban_sdk::symbol_short!("rcr_cnl"), record.payer.clone()),
+        recurring_id,
+    );
 }
 
 pub fn pause_recurring(e: &Env, caller: &Address, recurring_id: u32) {
