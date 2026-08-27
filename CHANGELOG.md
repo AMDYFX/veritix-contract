@@ -22,7 +22,7 @@ for contract upgrades.
 - Architecture document (`docs/architecture.md`) covering module responsibilities,
   data flow, storage layout, auth model, events, and integration points.
 
-### Changed
+### Changed.
 
 - CONTRIBUTING.md updated with pre-commit hook setup instructions.
 - Add revision snapshotting (`take_snapshot`, `get_snapshot_balance`,
