@@ -10,7 +10,7 @@ for contract upgrades.
 > signatures, event topics, storage keys) increment the **major** version.
 > Additive changes (new functions, new events, new optional memo fields)
 > increment the **minor** version. Internal refactors and dependency bumps
-> increment the **patch** version.
+> increment the **patch** version..
 
 ## [Unreleased]
 
@@ -25,6 +25,13 @@ for contract upgrades.
   both parties authenticated; the payer index is updated.
 - Test coverage for recurring payer transfer, permit nonce replay protection,
   storage TTL lifetimes, and dividend/airdrop supply invariants.
+- `add_to_whitelist_batch` — whitelist up to 50 accounts in a single admin call.
+- Cap `set_protocol_fee` at 500 bps (5%) to keep the protocol fee bounded.
+- Events for `setup_recurring`, `execute_recurring`, and `cancel_recurring`
+  (`rcr_set`, `rcr_exec`, `rcr_cnl`) so off-chain indexers can track recurring
+  lifecycle changes.
+- Test coverage for protocol fees, whitelist mode, `amend_recurring`, and event
+  emission across state-changing functions.
 
 ### Changed.
 

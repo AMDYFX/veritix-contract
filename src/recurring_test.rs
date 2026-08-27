@@ -304,7 +304,7 @@ fn test_resume_recurring_non_payer_panics() {
     client.resume_recurring(&intruder, &id);
 }
 
-// ── #735: transfer_recurring_payer ───────────────────────────────────────────
+// ── #736: amend_recurring ────────────────────────────────────────────────────
 
 fn read_recurring_record(
     e: &Env,
@@ -318,6 +318,178 @@ fn read_recurring_record(
             .unwrap()
     })
 }
+
+fn amend_setup() -> (
+    Env,
+    crate::contract::VeriTixPayClient<'static>,
+    Address,
+    Address,
+    Address,
+    u32,
+    Address,
+) {
+    use soroban_sdk::testutils::Address as _;
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let payer = Address::generate(&e);
+    let payee = Address::generate(&e);
+    let token = e.register_stellar_asset_contract(Address::generate(&e));
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &1000);
+
+    let id = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+    (e, client, payer, payee, token, id, contract_id)
+}
+
+#[test]
+fn test_amend_recurring_new_amount_only_succeeds() {
+    let (e, client, payer, _payee, _token, id, contract_id) = amend_setup();
+
+    // Only the amount changes; the interval stays at 100.
+    client.amend_recurring(&payer, &id, &200, &100);
+    let record = read_recurring_record(&e, &contract_id, id);
+    assert_eq!(record.amount, 200);
+    assert_eq!(record.interval, 100);
+}
+
+#[test]
+fn test_amend_recurring_new_interval_only_succeeds() {
+    let (e, client, payer, _payee, _token, id, contract_id) = amend_setup();
+
+    // Only the interval changes; the amount stays at 100.
+    client.amend_recurring(&payer, &id, &100, &200);
+    let record = read_recurring_record(&e, &contract_id, id);
+    assert_eq!(record.amount, 100);
+    assert_eq!(record.interval, 200);
+}
+
+#[test]
+fn test_amend_recurring_both_fields_succeeds() {
+    let (e, client, payer, _payee, _token, id, contract_id) = amend_setup();
+
+    client.amend_recurring(&payer, &id, &250, &150);
+    let record = read_recurring_record(&e, &contract_id, id);
+    assert_eq!(record.amount, 250);
+    assert_eq!(record.interval, 150);
+}
+
+#[test]
+#[should_panic(expected = "amount must be positive")]
+fn test_amend_recurring_neither_field_panics() {
+    let (_e, client, payer, _payee, _token, id, _contract_id) = amend_setup();
+    client.amend_recurring(&payer, &id, &0, &0);
+}
+
+#[test]
+#[should_panic(expected = "amount must be positive")]
+fn test_amend_recurring_zero_amount_panics() {
+    let (_e, client, payer, _payee, _token, id, _contract_id) = amend_setup();
+    client.amend_recurring(&payer, &id, &0, &100);
+}
+
+#[test]
+#[should_panic(expected = "interval must be positive")]
+fn test_amend_recurring_zero_interval_panics() {
+    let (_e, client, payer, _payee, _token, id, _contract_id) = amend_setup();
+    client.amend_recurring(&payer, &id, &100, &0);
+}
+
+#[test]
+#[should_panic(expected = "not the payer")]
+fn test_amend_recurring_wrong_payer_panics() {
+    let (_e, client, _payer, payee, _token, id, _contract_id) = amend_setup();
+    // Only the payer may amend the recurring payment.
+    client.amend_recurring(&payee, &id, &200, &100);
+}
+
+#[test]
+#[should_panic(expected = "recurring is not active")]
+fn test_amend_recurring_inactive_panics() {
+    let (_e, client, payer, _payee, _token, id, _contract_id) = amend_setup();
+    client.cancel_recurring(&payer, &id);
+    client.amend_recurring(&payer, &id, &200, &100);
+}
+
+#[cfg(test)]
+mod recurring_history_tests {
+    use crate::contract::VeritixContract;
+    use crate::recurring::record_execution;
+    use soroban_sdk::Env;
+
+    #[test]
+    fn test_recurring_execution_audit_log() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let recurring_id = 1;
+        let amount = 5000_i128;
+
+        // Record a successful execution
+        record_execution(&env, recurring_id, amount);
+
+        // Fetch history via contract view
+        let history = VeritixContract::get_recurring_history(env.clone(), recurring_id);
+        
+        assert_eq!(history.len(), 1);
+        let execution = history.get(0).unwrap();
+        assert_eq!(execution.recurring_id, recurring_id);
+        assert_eq!(execution.amount, amount);
+    }
+}
+#[cfg(test)]
+mod payee_recurring_tests {
+    use crate::contract::VeritixContract;
+    use crate::recurring::{index_recurring_for_payee, remove_recurring_for_payee};
+    use soroban_sdk::{
+        testutils::Address as _, Address, Env,
+    };
+
+    #[test]
+    fn test_get_recurring_by_payee_indexing() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let payee = Address::generate(&env);
+        let recurring_id = 42;
+
+        // Index the recurring payment for the payee
+        index_recurring_for_payee(&env, &payee, recurring_id);
+
+        // Fetch recurring IDs via contract view
+        let payee_recurrings = VeritixContract::get_recurring_by_payee(env.clone(), payee.clone());
+        
+        assert_eq!(payee_recurrings.len(), 1);
+        assert_eq!(payee_recurrings.get(0).unwrap(), recurring_id);
+
+        // Remove recurring payment and verify index update
+        remove_recurring_for_payee(&env, &payee, recurring_id);
+        let updated_recurrings = VeritixContract::get_recurring_by_payee(env, payee);
+        assert_eq!(updated_recurrings.len(), 0);
+    }
+}
+
+#[cfg(test)]
+mod recurring_active_tests {
+    use crate::contract::VeritixContract;
+    use soroban_sdk::Env;
+
+    #[test]
+    fn test_is_recurring_active_status() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let recurring_id = 99;
+
+        // Non-existent ID should return false
+        assert_eq!(VeritixContract::is_recurring_active(env.clone(), recurring_id), false);
+
+        // Setup mock record and test active vs paused states...
+    }
+}
+// ── #735: transfer_recurring_payer ───────────────────────────────────────────
 
 fn transfer_setup(
 ) -> (

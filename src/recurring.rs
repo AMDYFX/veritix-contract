@@ -1,4 +1,4 @@
-use crate::storage_types::{DataKey, RecurringPayment};
+use crate::storage_types::{DataKey, RecurringExecution, RecurringPayment};
 use soroban_sdk::{contracttype, token, Address, Env, Vec};
 
 #[contracttype]
@@ -60,6 +60,16 @@ pub fn setup_recurring(
     payer_ids.push_back(id);
     e.storage().persistent().set(&index_key, &payer_ids);
 
+    // #732: emit a setup event for off-chain indexers
+    e.events().publish(
+        (
+            soroban_sdk::symbol_short!("rcr_set"),
+            record.payer.clone(),
+            record.payee.clone(),
+        ),
+        (id, record.amount),
+    );
+
     id
 }
 
@@ -96,6 +106,16 @@ pub fn execute_recurring(e: &Env, recurring_id: u32) {
     e.storage()
         .persistent()
         .set(&DataKey::Recurring(recurring_id), &record);
+
+    // #732: emit an execution event for off-chain indexers
+    e.events().publish(
+        (
+            soroban_sdk::symbol_short!("rcr_exec"),
+            record.payer.clone(),
+            record.payee.clone(),
+        ),
+        (recurring_id, record.amount),
+    );
 }
 
 pub fn record_recurring_execution(e: Env, caller: Address, recurring_id: u32, amount: i128) {
@@ -207,6 +227,12 @@ pub fn cancel_recurring(e: &Env, caller: &Address, recurring_id: u32) {
         }
         e.storage().persistent().set(&index_key, &updated);
     }
+
+    // #732: emit a cancel event for off-chain indexers
+    e.events().publish(
+        (soroban_sdk::symbol_short!("rcr_cnl"), record.payer.clone()),
+        recurring_id,
+    );
 }
 
 pub fn pause_recurring(e: &Env, caller: &Address, recurring_id: u32) {
@@ -302,4 +328,47 @@ pub fn transfer_recurring_payer(e: &Env, caller: &Address, recurring_id: u32, ne
         (soroban_sdk::symbol_short!("rcr_pyr"), caller.clone(), record.payer.clone()),
         recurring_id,
     );
+}
+
+pub fn record_execution(e: &Env, recurring_id: u32, amount: i128) {
+    let ledger = e.ledger().sequence();
+    let execution = RecurringExecution {
+        recurring_id,
+        execution_ledger: ledger,
+        amount,
+    };
+
+    let key = DataKey::RecurringHistory(recurring_id);
+    let mut history: Vec<RecurringExecution> = e
+        .storage()
+        .instance()
+        .get(&key)
+        .unwrap_or_else(|| Vec::new(e));
+
+    history.push_back(execution);
+    e.storage().instance().set(&key, &history);
+}
+
+pub fn index_recurring_for_payee(e: &Env, payee: &Address, recurring_id: u32) {
+    let key = DataKey::PayeeRecurrings(payee.clone());
+    let mut recurrings: Vec<u32> = e
+        .storage()
+        .instance()
+        .get(&key)
+        .unwrap_or_else(|| Vec::new(e));
+
+    if !recurrings.contains(recurring_id) {
+        recurrings.push_back(recurring_id);
+        e.storage().instance().set(&key, &recurrings);
+    }
+}
+
+pub fn remove_recurring_for_payee(e: &Env, payee: &Address, recurring_id: u32) {
+    let key = DataKey::PayeeRecurrings(payee.clone());
+    if let Some(mut recurrings) = e.storage().instance().get::<DataKey, Vec<u32>>(&key) {
+        if let Some(index) = recurrings.iter().position(|id| id == recurring_id) {
+            recurrings.remove(index as u32);
+            e.storage().instance().set(&key, &recurrings);
+        }
+    }
 }

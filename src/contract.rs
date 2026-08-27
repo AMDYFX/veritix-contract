@@ -1,4 +1,6 @@
-use crate::storage_types::{DataKey, RecurringPayment, ResolverStats, VestingRecord, ContractInfo};
+use crate::storage_types::{
+    ContractInfo, DataKey, RecurringExecution, RecurringPayment, ResolverStats, VestingRecord,
+};
 use crate::validation::require_positive_amount;
 use crate::{
     admin, allowance, balance, dispute, escrow, multi_escrow, permit, recurring, snapshot,
@@ -237,6 +239,8 @@ pub trait VeriTixPayTrait {
     fn resume_recurring(e: Env, caller: Address, recurring_id: u32);
     // #735: transfer a recurring payment to a new payer
     fn transfer_recurring_payer(e: Env, caller: Address, recurring_id: u32, new_payer: Address);
+    // #741: batch whitelist add (max 50 accounts)
+    fn add_to_whitelist_batch(e: Env, admin: Address, accounts: Vec<Address>);
 }
 
 #[contracttype]
@@ -1190,6 +1194,8 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn set_protocol_fee(e: Env, admin: Address, fee_bps: u32, treasury: Address) {
         admin::check_admin(&e, &admin);
+        // #745: cap the protocol fee at 500 basis points (5%)
+        assert!(fee_bps <= 500, "protocol fee cannot exceed 500 bps");
         e.storage().persistent().set(&DataKey::FeeBps, &fee_bps);
         e.storage()
             .persistent()
@@ -1202,5 +1208,66 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn transfer_recurring_payer(e: Env, caller: Address, recurring_id: u32, new_payer: Address) {
         recurring::transfer_recurring_payer(&e, &caller, recurring_id, new_payer)
+    }
+
+    fn add_to_whitelist_batch(e: Env, admin: Address, accounts: Vec<Address>) {
+        whitelist::add_to_whitelist_batch(&e, &admin, &accounts)
+    }
+}
+
+// NOTE: this extension contract (added by earlier merged PRs) is merged into a
+// single definition here because duplicate `VeritixContract` struct/impl blocks
+// from those merges broke compilation (E0428 duplicate definitions).
+#[contract]
+pub struct VeritixContract;
+
+#[contractimpl]
+impl VeritixContract {
+    /// Retrieves the execution audit log for a specific recurring payment schedule.
+    pub fn get_recurring_history(e: Env, recurring_id: u32) -> Vec<RecurringExecution> {
+        let key = DataKey::RecurringHistory(recurring_id);
+        e.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(&e))
+    }
+
+    /// Retrieves all recurring payment IDs associated with a specific payee address.
+    pub fn get_recurring_by_payee(e: Env, payee: Address) -> Vec<u32> {
+        let key = DataKey::PayeeRecurrings(payee);
+        e.storage()
+            .instance()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(&e))
+    }
+
+    /// Returns a boolean indicating whether a recurring payment schedule is currently active and not paused,
+    /// avoiding the overhead of fetching the full payment record.
+    pub fn is_recurring_active(e: Env, recurring_id: u32) -> bool {
+        let key = DataKey::Recurring(recurring_id);
+
+        // Retrieve the recurring record from storage instance/persistent storage
+        // (pause is modeled as `active = false`, so only `active` is checked)
+        if let Some(recurring) = e
+            .storage()
+            .instance()
+            .get::<DataKey, crate::recurring::RecurringRecord>(&key)
+        {
+            recurring.active
+        } else {
+            false
+        }
+    }
+
+    /// Sets the protocol fee and treasury address for split distributions (admin-only, max 2%).
+    pub fn set_split_protocol_fee(e: Env, admin: Address, fee_bps: u32, treasury: Address) {
+        crate::splitter::set_split_fee_config(&e, &admin, fee_bps, &treasury);
+    }
+
+    /// Retrieves the current split protocol fee basis points and treasury address.
+    pub fn get_split_protocol_fee(e: Env) -> (u32, Option<Address>) {
+        let fee_bps: u32 = e.storage().instance().get(&DataKey::SplitProtocolFeeBps).unwrap_or(0);
+        let treasury: Option<Address> = e.storage().instance().get(&DataKey::SplitProtocolTreasury);
+        (fee_bps, treasury)
     }
 }
