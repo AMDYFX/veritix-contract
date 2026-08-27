@@ -24,3 +24,13 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - dependencies
+
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /veritixpay/contract/token
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+    open-pull-requests-limit: 5
