@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::recurring::{get_recurring_history, record_recurring_execution};
-use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Env};
+use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Address, Env};
 
 #[test]
 fn test_recurring_history_grows() {
@@ -193,8 +193,6 @@ fn test_cancel_recurring_removes_from_payer_index() {
 
 #[test]
 fn test_delayed_execute_does_not_drift_schedule() {
-#[test]
-fn test_pause_and_resume_by_payer() {
     use soroban_sdk::{testutils::Address as _, Address};
     let e = Env::default();
     e.mock_all_auths();
@@ -204,30 +202,6 @@ fn test_pause_and_resume_by_payer() {
 
     let payer = Address::generate(&e);
     let payee = Address::generate(&e);
-    let token = e.register_stellar_asset_contract(Address::generate(&e));
-    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &1000);
-
-    let id = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
-
-    client.pause_recurring(&payer, &id);
-    assert!(!client.is_recurring_active(&id));
-
-    client.resume_recurring(&payer, &id);
-    assert!(client.is_recurring_active(&id));
-}
-
-#[test]
-#[should_panic(expected = "unauthorized")]
-fn test_pause_recurring_non_payer_panics() {
-    use soroban_sdk::{testutils::Address as _, Address};
-    let e = Env::default();
-    e.mock_all_auths();
-
-    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
-    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
-
-    let payer = soroban_sdk::Address::generate(&e);
-    let payee = soroban_sdk::Address::generate(&e);
     let token = e.register_stellar_asset_contract(payer.clone());
     soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &100_000_000);
 
@@ -263,6 +237,40 @@ fn test_pause_recurring_non_payer_panics() {
     assert_eq!(record_final.last_charged_ledger, start + 200);
     assert_eq!(record_final.execution_count, 2);
 }
+
+#[test]
+fn test_pause_and_resume_by_payer() {
+    use soroban_sdk::{testutils::Address as _, Address};
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let payer = Address::generate(&e);
+    let payee = Address::generate(&e);
+    let token = e.register_stellar_asset_contract(Address::generate(&e));
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &1000);
+
+    let id = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+
+    client.pause_recurring(&payer, &id);
+    assert!(!client.is_recurring_active(&id));
+
+    client.resume_recurring(&payer, &id);
+    assert!(client.is_recurring_active(&id));
+}
+
+#[test]
+#[should_panic(expected = "unauthorized")]
+fn test_pause_recurring_non_payer_panics() {
+    use soroban_sdk::{testutils::Address as _, Address};
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
     let payer = Address::generate(&e);
     let intruder = Address::generate(&e);
     let payee = Address::generate(&e);
@@ -338,7 +346,6 @@ fn amend_setup() -> (
 
 #[test]
 fn test_amend_recurring_new_amount_only_succeeds() {
-    use soroban_sdk::testutils::Address as _;
     let (e, client, payer, _payee, _token, id, contract_id) = amend_setup();
 
     // Only the amount changes; the interval stays at 100.
@@ -350,7 +357,6 @@ fn test_amend_recurring_new_amount_only_succeeds() {
 
 #[test]
 fn test_amend_recurring_new_interval_only_succeeds() {
-    use soroban_sdk::testutils::Address as _;
     let (e, client, payer, _payee, _token, id, contract_id) = amend_setup();
 
     // Only the interval changes; the amount stays at 100.
@@ -362,7 +368,6 @@ fn test_amend_recurring_new_interval_only_succeeds() {
 
 #[test]
 fn test_amend_recurring_both_fields_succeeds() {
-    use soroban_sdk::testutils::Address as _;
     let (e, client, payer, _payee, _token, id, contract_id) = amend_setup();
 
     client.amend_recurring(&payer, &id, &250, &150);
@@ -374,32 +379,28 @@ fn test_amend_recurring_both_fields_succeeds() {
 #[test]
 #[should_panic(expected = "amount must be positive")]
 fn test_amend_recurring_neither_field_panics() {
-    use soroban_sdk::testutils::Address as _;
-    let (_e, client, payer, _payee, _token, id) = amend_setup();
+    let (_e, client, payer, _payee, _token, id, _contract_id) = amend_setup();
     client.amend_recurring(&payer, &id, &0, &0);
 }
 
 #[test]
 #[should_panic(expected = "amount must be positive")]
 fn test_amend_recurring_zero_amount_panics() {
-    use soroban_sdk::testutils::Address as _;
-    let (_e, client, payer, _payee, _token, id) = amend_setup();
+    let (_e, client, payer, _payee, _token, id, _contract_id) = amend_setup();
     client.amend_recurring(&payer, &id, &0, &100);
 }
 
 #[test]
 #[should_panic(expected = "interval must be positive")]
 fn test_amend_recurring_zero_interval_panics() {
-    use soroban_sdk::testutils::Address as _;
-    let (_e, client, payer, _payee, _token, id) = amend_setup();
+    let (_e, client, payer, _payee, _token, id, _contract_id) = amend_setup();
     client.amend_recurring(&payer, &id, &100, &0);
 }
 
 #[test]
 #[should_panic(expected = "not the payer")]
 fn test_amend_recurring_wrong_payer_panics() {
-    use soroban_sdk::testutils::Address as _;
-    let (_e, client, _payer, payee, _token, id) = amend_setup();
+    let (_e, client, _payer, payee, _token, id, _contract_id) = amend_setup();
     // Only the payer may amend the recurring payment.
     client.amend_recurring(&payee, &id, &200, &100);
 }
@@ -407,8 +408,7 @@ fn test_amend_recurring_wrong_payer_panics() {
 #[test]
 #[should_panic(expected = "recurring is not active")]
 fn test_amend_recurring_inactive_panics() {
-    use soroban_sdk::testutils::Address as _;
-    let (_e, client, payer, _payee, _token, id) = amend_setup();
+    let (_e, client, payer, _payee, _token, id, _contract_id) = amend_setup();
     client.cancel_recurring(&payer, &id);
     client.amend_recurring(&payer, &id, &200, &100);
 }

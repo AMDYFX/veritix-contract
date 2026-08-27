@@ -12,7 +12,7 @@
 use crate::contract::{VeriTixPay, VeriTixPayClient};
 use soroban_sdk::{
     testutils::{Address as _, Events as _, Ledger as _},
-    token, Address, Bytes, Env, Symbol, Vec,
+    token, Address, Bytes, Env, Vec,
 };
 
 fn setup() -> (
@@ -37,25 +37,18 @@ fn setup() -> (
     let beneficiary = Address::generate(&e);
     let token = e.register_stellar_asset_contract(depositor.clone());
     soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&depositor, &50_000_000);
+    let arbiter = Address::generate(&e);
 
-    (
-        e,
-        client,
-        admin,
-        depositor,
-        beneficiary,
-        token,
-        Address::generate(&e),
-        contract_id,
-    )
+    (e, client, admin, depositor, beneficiary, token, arbiter, contract_id)
 }
 
 fn has_event(e: &Env, symbol: &str) -> bool {
+    let sym: soroban_sdk::xdr::ScVal = soroban_sdk::xdr::ScVal::Symbol(symbol.try_into().unwrap());
     e.events().all().events().iter().any(|ev| {
-        ev.topics()
-            .get(0)
-            .map(|t| t == Symbol::new(e, symbol).into())
-            .unwrap_or(false)
+        matches!(
+            &ev.body,
+            soroban_sdk::xdr::ContractEventBody::V0(v0) if v0.topics.first() == Some(&sym)
+        )
     })
 }
 
