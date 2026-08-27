@@ -1,7 +1,7 @@
 #![cfg(test)]
 
-use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Address, Env};
 use crate::contract::{VeriTixPay, VeriTixPayClient};
+use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Address, Env};
 
 struct TestEnv<'a> {
     e: Env,
@@ -22,7 +22,12 @@ fn setup() -> TestEnv<'static> {
 
     client.initialize(&admin);
 
-    TestEnv { e, client, admin, new_admin }
+    TestEnv {
+        e,
+        client,
+        admin,
+        new_admin,
+    }
 }
 
 #[test]
@@ -77,4 +82,70 @@ fn test_full_ownership_transfer_lifecycle() {
 
     t.e.ledger().with_mut(|l| l.sequence_number = active_after);
     t.client.transfer_ownership(&Address::generate(&t.e));
+}
+
+// ── #662: admin & pause protection ────────────────────────────────────────────
+
+#[test]
+#[should_panic(expected = "Unauthorized: caller is not the contract admin")]
+fn test_check_admin_panics_for_non_admin() {
+    let t = setup();
+    let stranger = Address::generate(&t.e);
+    let from = Address::generate(&t.e);
+    let token = crate::test::create_token_contract(&t.e, &t.admin);
+    soroban_sdk::token::StellarAssetClient::new(&t.e, &token).mint(&from, &1000);
+
+    // Anything that routes through check_admin with a non-admin caller panics.
+    t.client.clawback(&stranger, &from, &100);
+}
+
+#[test]
+fn test_set_clawback_cosigner_stored() {
+    let t = setup();
+    let cosigner = Address::generate(&t.e);
+    t.e.as_contract(&t.client.address, || {
+        crate::admin::set_clawback_cosigner(&t.e, &t.admin, &cosigner);
+        let stored = crate::admin::read_clawback_cosigner(&t.e);
+        assert_eq!(stored, Some(cosigner.clone()));
+    });
+}
+
+#[test]
+fn test_clawback_batch_without_cosigner_succeeds() {
+    let t = setup();
+    let from = Address::generate(&t.e);
+    t.client.mint(&t.admin, &from, &1000);
+
+    let clawbacks = soroban_sdk::vec![&t.e, (from.clone(), 400i128)];
+    t.client.clawback_batch(&t.admin, &clawbacks);
+    assert_eq!(t.client.balance(&from), 600);
+}
+
+#[test]
+#[should_panic(expected = "insufficient balance")]
+fn test_clawback_insufficient_balance_panics() {
+    let t = setup();
+    let from = Address::generate(&t.e);
+    t.client.mint(&t.admin, &from, &100);
+
+    let clawbacks = soroban_sdk::vec![&t.e, (from.clone(), 200i128)];
+    t.client.clawback_batch(&t.admin, &clawbacks);
+}
+
+#[test]
+fn test_set_paused_by_admin_toggles_state() {
+    let t = setup();
+    t.client.set_paused(&t.admin, &true);
+    assert!(t.client.is_paused());
+    t.client.set_paused(&t.admin, &false);
+    assert!(!t.client.is_paused());
+}
+
+#[test]
+#[should_panic(expected = "InvalidFreeze: cannot freeze the admin address")]
+fn test_admin_cannot_freeze_itself() {
+    let t = setup();
+    t.e.as_contract(&t.client.address, || {
+        crate::freeze::freeze_account(&t.e, &t.admin, &t.admin);
+    });
 }

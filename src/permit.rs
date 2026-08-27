@@ -1,6 +1,6 @@
-use soroban_sdk::{symbol_short, xdr::ToXdr, Bytes, BytesN, Env, Address, Vec};
 use crate::allowance::write_allowance;
 use crate::storage_types::DataKey;
+use soroban_sdk::{symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, Vec};
 
 fn read_nonce(e: &Env, owner: &Address) -> u64 {
     let key = DataKey::Nonce(owner.clone());
@@ -19,7 +19,10 @@ pub fn nonces(e: &Env, owner: Address) -> u64 {
 pub fn check_and_increment_nonce(e: &Env, user: &Address, expected_nonce: u32) {
     let current: u64 = read_nonce(e, user);
     if expected_nonce as u64 != current {
-        panic!("InvalidNonce: expected {} but got {}", current, expected_nonce);
+        panic!(
+            "InvalidNonce: expected {} but got {}",
+            current, expected_nonce
+        );
     }
     write_nonce(e, user, current + 1);
 }
@@ -41,7 +44,10 @@ pub fn permit_batch(
     if approvals.len() > 20 {
         panic!("TooManyApprovals: maximum 20 approvals per batch");
     }
-    assert!(public_key.to_array().len() == 32, "invalid public_key byte length");
+    assert!(
+        public_key.to_array().len() == 32,
+        "invalid public_key byte length"
+    );
 
     let current_nonce = read_nonce(e, &owner);
     if nonce != current_nonce {
@@ -50,7 +56,8 @@ pub fn permit_batch(
 
     let hash = hash_permit_batch(e, &owner, &approvals, nonce);
     let hash_bytes: Bytes = hash.into();
-    e.crypto().ed25519_verify(&public_key, &hash_bytes, &signature);
+    e.crypto()
+        .ed25519_verify(&public_key, &hash_bytes, &signature);
 
     write_nonce(e, &owner, current_nonce + 1);
 

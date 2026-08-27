@@ -1,8 +1,11 @@
 #[cfg(test)]
 mod tests {
-    use crate::test::create_token_contract;
-    use soroban_sdk::{testutils::{Address as _, Events as _}, Address, Env, Vec};
     use crate::contract::{VeriTixPay, VeriTixPayClient};
+    use crate::test::create_token_contract;
+    use soroban_sdk::{
+        testutils::{Address as _, Events as _},
+        Address, Env, Vec,
+    };
 
     #[test]
     fn test_batch_basic_operations() {
@@ -48,7 +51,10 @@ mod tests {
         client.approve_batch(&from, &approvals);
 
         let events = e.events().all();
-        assert!(!events.events().is_empty(), "per-approval events should be emitted");
+        assert!(
+            !events.events().is_empty(),
+            "per-approval events should be emitted"
+        );
     }
 
     #[test]
@@ -102,6 +108,80 @@ mod tests {
         assert_eq!(total, 800);
 
         let events = e.events().all();
-        assert!(!events.events().is_empty(), "per-recipient mint events should be emitted");
+        assert!(
+            !events.events().is_empty(),
+            "per-recipient mint events should be emitted"
+        );
+    }
+
+    // ── #677: batch atomicity ───────────────────────────────────────────────────
+
+    #[test]
+    #[should_panic(expected = "insufficient balance")]
+    fn test_clawback_batch_one_insufficient_panics_atomically() {
+        let e = Env::default();
+        e.mock_all_auths();
+
+        let contract_id = e.register_contract(None, VeriTixPay);
+        let client = VeriTixPayClient::new(&e, &contract_id);
+
+        let admin = Address::generate(&e);
+        client.initialize(&admin);
+
+        let u1 = Address::generate(&e);
+        let u2 = Address::generate(&e);
+        client.mint(&admin, &u1, &100);
+        client.mint(&admin, &u2, &50);
+
+        let mut clawbacks = Vec::new(&e);
+        clawbacks.push_back((u1.clone(), 100i128)); // ok
+        clawbacks.push_back((u2.clone(), 200i128)); // insufficient -> whole batch reverts
+        client.clawback_batch(&admin, &clawbacks);
+    }
+
+    #[test]
+    #[should_panic(expected = "balance overflow")]
+    fn test_mint_batch_one_entry_overflow_panics_atomically() {
+        let e = Env::default();
+        e.mock_all_auths();
+
+        let contract_id = e.register_contract(None, VeriTixPay);
+        let client = VeriTixPayClient::new(&e, &contract_id);
+
+        let admin = Address::generate(&e);
+        client.initialize(&admin);
+
+        let u1 = Address::generate(&e);
+        let mut mints = Vec::new(&e);
+        mints.push_back((u1.clone(), i128::MAX));
+        mints.push_back((u1.clone(), 1i128)); // MAX + 1 overflows -> whole batch reverts
+        client.mint_batch(&admin, &mints);
+    }
+
+    #[test]
+    fn test_mint_batch_returns_total_and_sets_balances() {
+        let e = Env::default();
+        e.mock_all_auths();
+
+        let contract_id = e.register_contract(None, VeriTixPay);
+        let client = VeriTixPayClient::new(&e, &contract_id);
+
+        let admin = Address::generate(&e);
+        client.initialize(&admin);
+
+        let u1 = Address::generate(&e);
+        let u2 = Address::generate(&e);
+        let u3 = Address::generate(&e);
+
+        let mut mints = Vec::new(&e);
+        mints.push_back((u1.clone(), 100i128));
+        mints.push_back((u2.clone(), 200i128));
+        mints.push_back((u3.clone(), 700i128));
+
+        let total = client.mint_batch(&admin, &mints);
+        assert_eq!(total, 1000);
+        assert_eq!(client.balance(&u1), 100);
+        assert_eq!(client.balance(&u2), 200);
+        assert_eq!(client.balance(&u3), 700);
     }
 }

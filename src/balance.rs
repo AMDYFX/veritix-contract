@@ -1,12 +1,18 @@
-use soroban_sdk::Env;
 use crate::storage_types::DataKey;
+use soroban_sdk::Env;
 
 pub fn read_supply(e: &Env) -> i128 {
-    e.storage().persistent().get(&DataKey::TotalSupply).unwrap_or(0)
+    e.storage()
+        .persistent()
+        .get(&DataKey::TotalSupply)
+        .unwrap_or(0)
 }
 
 pub fn read_max_supply(e: &Env) -> i128 {
-    e.storage().persistent().get(&DataKey::MaxSupply).unwrap_or(0)
+    e.storage()
+        .persistent()
+        .get(&DataKey::MaxSupply)
+        .unwrap_or(0)
 }
 
 pub fn increase_supply(e: &Env, amount: i128) {
@@ -16,19 +22,26 @@ pub fn increase_supply(e: &Env, amount: i128) {
     if max > 0 && new_supply > max {
         panic!("SupplyCap: minting would exceed max supply of {}", max);
     }
-    e.storage().persistent().set(&DataKey::TotalSupply, &new_supply);
+    e.storage()
+        .persistent()
+        .set(&DataKey::TotalSupply, &new_supply);
 }
 
 pub fn decrease_supply(e: &Env, amount: i128) {
     let supply = read_supply(e);
     let new_supply = supply.checked_sub(amount).expect("supply underflow");
-    e.storage().persistent().set(&DataKey::TotalSupply, &new_supply);
+    e.storage()
+        .persistent()
+        .set(&DataKey::TotalSupply, &new_supply);
 }
 
 use soroban_sdk::Address;
 
 pub fn balance_of(e: &Env, account: &Address) -> i128 {
-    e.storage().persistent().get(&DataKey::BalanceOf(account.clone())).unwrap_or(0)
+    e.storage()
+        .persistent()
+        .get(&DataKey::BalanceOf(account.clone()))
+        .unwrap_or(0)
 }
 
 pub fn spendable_balance(e: &Env, account: &Address) -> i128 {
@@ -39,15 +52,22 @@ pub fn spendable_balance(e: &Env, account: &Address) -> i128 {
 }
 
 pub fn is_frozen(e: &Env, account: &Address) -> bool {
-    e.storage().persistent().get(&DataKey::Frozen(account.clone())).unwrap_or(false)
+    e.storage()
+        .persistent()
+        .get(&DataKey::Frozen(account.clone()))
+        .unwrap_or(false)
 }
 
 pub fn set_authorized(e: &Env, admin: &Address, account: &Address, authorized: bool) {
     crate::admin::check_admin(e, admin);
     if authorized {
-        e.storage().persistent().remove(&DataKey::Frozen(account.clone()));
+        e.storage()
+            .persistent()
+            .remove(&DataKey::Frozen(account.clone()));
     } else {
-        e.storage().persistent().set(&DataKey::Frozen(account.clone()), &true);
+        e.storage()
+            .persistent()
+            .set(&DataKey::Frozen(account.clone()), &true);
     }
 }
 
@@ -59,9 +79,13 @@ pub fn burn_from(e: &Env, spender: &Address, from: &Address, amount: i128) {
     assert!(balance >= amount, "insufficient balance");
     let new_balance = balance - amount;
     if new_balance == 0 {
-        e.storage().persistent().remove(&DataKey::BalanceOf(from.clone()));
+        e.storage()
+            .persistent()
+            .remove(&DataKey::BalanceOf(from.clone()));
     } else {
-        e.storage().persistent().set(&DataKey::BalanceOf(from.clone()), &new_balance);
+        e.storage()
+            .persistent()
+            .set(&DataKey::BalanceOf(from.clone()), &new_balance);
     }
     decrease_supply(e, amount);
 }
@@ -75,10 +99,14 @@ pub fn add_balance(e: &Env, account: &Address, amount: i128) {
 }
 
 pub fn receive_balance(e: &Env, account: &Address, amount: i128) {
-    if *account == e.current_contract_address() { return; }
+    if *account == e.current_contract_address() {
+        return;
+    }
     let current = balance_of(e, account);
     let new_balance = current.checked_add(amount).expect("balance overflow");
-    e.storage().persistent().set(&DataKey::BalanceOf(account.clone()), &new_balance);
+    e.storage()
+        .persistent()
+        .set(&DataKey::BalanceOf(account.clone()), &new_balance);
     update_holder_set(e, account);
 }
 
@@ -96,10 +124,20 @@ pub fn spend_balance(e: &Env, account: &Address, amount: i128) {
 }
 
 pub fn update_holder_set(e: &Env, addr: &Address) {
-    if *addr == e.current_contract_address() { return; }
+    if *addr == e.current_contract_address() {
+        return;
+    }
     let bal = balance_of(e, addr);
-    let mut count: u32 = e.storage().persistent().get(&DataKey::HolderCount).unwrap_or(0);
-    let mut holders: soroban_sdk::Vec<Address> = e.storage().persistent().get(&DataKey::HolderSet).unwrap_or(soroban_sdk::Vec::new(e));
+    let mut count: u32 = e
+        .storage()
+        .persistent()
+        .get(&DataKey::HolderCount)
+        .unwrap_or(0);
+    let mut holders: soroban_sdk::Vec<Address> = e
+        .storage()
+        .persistent()
+        .get(&DataKey::HolderSet)
+        .unwrap_or(soroban_sdk::Vec::new(e));
     let mut exists = false;
     let mut idx = 0;
     for i in 0..holders.len() {
@@ -116,7 +154,9 @@ pub fn update_holder_set(e: &Env, addr: &Address) {
         e.storage().persistent().set(&DataKey::HolderCount, &count);
     } else if bal == 0 && exists {
         holders.remove(idx);
-        if count > 0 { count -= 1; }
+        if count > 0 {
+            count -= 1;
+        }
         e.storage().persistent().set(&DataKey::HolderSet, &holders);
         e.storage().persistent().set(&DataKey::HolderCount, &count);
     }
