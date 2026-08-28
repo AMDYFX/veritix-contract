@@ -671,3 +671,100 @@ fn test_execute_recurring_without_window_allows_late_execution() {
     client.execute_recurring(&id);
     assert!(client.is_recurring_active(&id));
 }
+
+// ── #737: cancel_recurring_batch tests ───────────────────────────────────────
+
+#[test]
+fn test_cancel_recurring_batch_all_succeed() {
+    use soroban_sdk::{testutils::Address as _, Address};
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let payer = Address::generate(&e);
+    let payee = Address::generate(&e);
+    let token = e.register_stellar_asset_contract(Address::generate(&e));
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &10_000);
+
+    let id1 = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+    let id2 = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+    assert!(client.is_recurring_active(&id1));
+    assert!(client.is_recurring_active(&id2));
+
+    client.cancel_recurring_batch(&payer, &soroban_sdk::vec![&e, id1, id2]);
+    assert!(!client.is_recurring_active(&id1));
+    assert!(!client.is_recurring_active(&id2));
+}
+
+#[test]
+#[should_panic(expected = "not the payer for recurring")]
+fn test_cancel_recurring_batch_one_wrong_payer_reverts_all() {
+    use soroban_sdk::{testutils::Address as _, Address};
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let payer = Address::generate(&e);
+    let intruder = Address::generate(&e);
+    let payee = Address::generate(&e);
+    let token = e.register_stellar_asset_contract(Address::generate(&e));
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &10_000);
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&intruder, &10_000);
+
+    let id1 = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+    let id2 = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+
+    // An intruder trying to cancel a batch containing a payer-owned id fails.
+    client.cancel_recurring_batch(&intruder, &soroban_sdk::vec![&e, id1, id2]);
+}
+
+#[test]
+#[should_panic(expected = "batch size cannot exceed 20")]
+fn test_cancel_recurring_batch_over_limit_panics() {
+    use soroban_sdk::{testutils::Address as _, Address};
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let payer = Address::generate(&e);
+    let payee = Address::generate(&e);
+    let token = e.register_stellar_asset_contract(Address::generate(&e));
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &10_000);
+
+    let mut ids: soroban_sdk::Vec<u32> = soroban_sdk::Vec::new(&e);
+    for _ in 0..25 {
+        ids.push_back(client.setup_recurring(&payer, &payee, &token, &100, &100, &5));
+    }
+    client.cancel_recurring_batch(&payer, &ids);
+}
+
+#[test]
+fn test_cancel_recurring_batch_removes_all_from_payer_index() {
+    use soroban_sdk::{testutils::Address as _, Address};
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let payer = Address::generate(&e);
+    let payee = Address::generate(&e);
+    let token = e.register_stellar_asset_contract(Address::generate(&e));
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &10_000);
+
+    let id1 = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+    let id2 = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+    let list_before = client.get_recurring_by_payer(&payer);
+    assert_eq!(list_before.len(), 2);
+
+    client.cancel_recurring_batch(&payer, &soroban_sdk::vec![&e, id1, id2]);
+    // Every recurring the payer owned is now inactive.
+    assert!(!client.is_recurring_active(&id1));
+    assert!(!client.is_recurring_active(&id2));
+}

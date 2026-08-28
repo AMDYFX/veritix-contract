@@ -1414,3 +1414,67 @@ fn test_protocol_fee_not_applied_to_refunds() {
     assert_eq!(token_client.balance(&t.depositor), 50_000_000);
     assert_eq!(token_client.balance(&t.treasury), 0);
 }
+
+// ── #738: get_all_escrows_between ────────────────────────────────────────────
+
+#[test]
+fn test_get_all_escrows_between_includes_active_and_settled() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 3);
+    let expiry = t.e.ledger().sequence() + 1000;
+
+    let id1 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+    let id2 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+
+    // Settle id1 so it is part of the finished history.
+    t.client.release_escrow(&t.depositor, &id1);
+    assert!(t.client.get_escrow(&id1).released);
+
+    let ids = t.client.get_all_escrows_between(&t.depositor, &t.beneficiary);
+    assert_eq!(ids.len(), 2);
+    assert_eq!(ids.get(0).unwrap(), id1);
+    assert_eq!(ids.get(1).unwrap(), id2);
+}
+
+#[test]
+fn test_get_all_escrows_between_filters_other_beneficiary() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 3);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let other = Address::generate(&t.e);
+    soroban_sdk::token::StellarAssetClient::new(&t.e, &t.token).mint(&other, &crate::storage_types::MIN_ESCROW_AMOUNT);
+
+    let _id1 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &empty_memo(&t.e),
+    );
+
+    // Escrow between the depositor and `other` does not exist yet.
+    let ids = t.client.get_all_escrows_between(&t.depositor, &other);
+    assert_eq!(ids.len(), 0);
+}
+
+#[test]
+fn test_get_all_escrows_between_empty_with_no_escrows() {
+    let t = setup();
+    let ids = t.client.get_all_escrows_between(&t.depositor, &t.beneficiary);
+    assert_eq!(ids.len(), 0);
+}

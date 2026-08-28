@@ -563,6 +563,25 @@ pub fn get_escrows_by_depositor(e: Env, depositor: Address) -> Vec<u32> {
     read_escrow_ids(&e, DataKey::DepositorEscrows(depositor))
 }
 
+// #738: Return all escrow IDs (active and settled) between a depositor and
+// beneficiary, in creation order, for a full audit trail.
+pub fn get_all_escrows_between(e: Env, depositor: Address, beneficiary: Address) -> Vec<u32> {
+    let escrows = get_escrows_by_depositor(e.clone(), depositor);
+    let mut result = Vec::new(&e);
+    for i in 0..escrows.len() {
+        let id = escrows.get(i).unwrap();
+        let record: EscrowRecord = e
+            .storage()
+            .persistent()
+            .get(&DataKey::Escrow(id))
+            .unwrap_or_else(|| panic!("escrow {} not found", id));
+        if record.beneficiary == beneficiary {
+            result.push_back(id);
+        }
+    }
+    result
+}
+
 pub fn get_escrows_by_beneficiary(e: Env, beneficiary: Address) -> Vec<u32> {
     read_escrow_ids(&e, DataKey::BeneficiaryEscrows(beneficiary))
 }
