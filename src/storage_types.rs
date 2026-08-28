@@ -36,10 +36,14 @@ pub enum DataKey {
     LastEscrowTime(Address),
     Allowance(Address, Address),
     Frozen(Address),
+    // #743: timed freeze — auto-clears once the ledger passes until_ledger
+    FrozenUntil(Address),
     EscrowDispute(u32),
     TotalSupply,
     RecurringCount,
     Recurring(u32),
+    // #749: global execution window (in ledgers) for recurring payments
+    RecurringExecutionWindow,
     Arbiter,
     ResolverStats(Address),
     FeeBps,
@@ -47,6 +51,9 @@ pub enum DataKey {
     TotalFeesCollected,
     SplitCount,
     Split(u32),
+    // #773: split distribution protocol fee
+    SplitProtocolFeeBps,
+    SplitProtocolTreasury,
     PayeeRecurrings(Address),
     MediationFeeBps,
     Holders,
@@ -67,6 +74,8 @@ pub enum DataKey {
     MaxSupply,
     Paused,
     Nonce(Address),
+    // #748: admin nonce tracking for signed bulk whitelist calls
+    AdminNonce(Address),
     PayerRecurrings(Address),
     ClawbackCosigner,
     Snapshot(Address),
@@ -117,6 +126,7 @@ pub struct ContractInfo {
     pub initialized_at_ledger: u32,
 }
 
+
 use soroban_sdk::{contracttype, Address};
 
 #[contracttype]
@@ -124,4 +134,13 @@ use soroban_sdk::{contracttype, Address};
 pub enum DataKey {
     // ... existing keys
     SenderSplits(Address),
+// NOTE: RecurringExecution is a standalone record; the DataKey variants that
+// earlier merged PRs appended as duplicate `enum DataKey` blocks were merged
+// into the single enum above to fix duplicate-definition compile errors.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecurringExecution {
+    pub recurring_id: u32,
+    pub execution_ledger: u32,
+    pub amount: i128,
 }

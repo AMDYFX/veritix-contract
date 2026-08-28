@@ -1282,3 +1282,135 @@ fn test_dispute_on_one_escrow_does_not_affect_others() {
     assert!(t.client.get_escrow(&id2).released);
     assert!(!t.client.get_escrow(&id1).released);
 }
+
+// ── #745: Protocol fee ────────────────────────────────────────────────────────
+
+struct FeeEnv<'a> {
+    e: Env,
+    client: VeriTixPayClient<'a>,
+    admin: Address,
+    depositor: Address,
+    beneficiary: Address,
+    treasury: Address,
+    token: Address,
+}
+
+fn fee_setup() -> FeeEnv<'static> {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let depositor = Address::generate(&e);
+    let beneficiary = Address::generate(&e);
+    let treasury = Address::generate(&e);
+    let token = e.register_stellar_asset_contract(depositor.clone());
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&depositor, &50_000_000);
+
+    FeeEnv {
+        e,
+        client,
+        admin,
+        depositor,
+        beneficiary,
+        treasury,
+        token,
+    }
+}
+
+fn fee_create_escrow(t: &FeeEnv, amount: i128) -> u32 {
+    let expiry = t.e.ledger().sequence() + 1000;
+    t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &amount,
+        &expiry,
+        &empty_memo(&t.e),
+    )
+}
+
+#[test]
+fn test_protocol_fee_zero_full_amount_to_beneficiary() {
+    let t = fee_setup();
+    let token_client = soroban_sdk::token::Client::new(&t.e, &t.token);
+
+    // No fee configured — the full amount goes to the beneficiary.
+    let id = fee_create_escrow(&t, 10_000_000);
+    t.client.release_escrow(&t.depositor, &id);
+
+    assert_eq!(token_client.balance(&t.beneficiary), 10_000_000);
+    assert_eq!(token_client.balance(&t.treasury), 0);
+}
+
+#[test]
+fn test_protocol_fee_2pct_correctly_deducted() {
+    let t = fee_setup();
+    let token_client = soroban_sdk::token::Client::new(&t.e, &t.token);
+
+    // 2% protocol fee (200 bps).
+    t.client.set_protocol_fee(&t.admin, &200, &t.treasury);
+
+    let id = fee_create_escrow(&t, 10_000_000);
+    t.client.release_escrow(&t.depositor, &id);
+
+    // 2% of 10_000_000 = 200_000 deducted, rest goes to the beneficiary.
+    assert_eq!(token_client.balance(&t.beneficiary), 9_800_000);
+}
+
+#[test]
+fn test_protocol_fee_treasury_receives_fee() {
+    let t = fee_setup();
+    let token_client = soroban_sdk::token::Client::new(&t.e, &t.token);
+
+    t.client.set_protocol_fee(&t.admin, &200, &t.treasury);
+
+    let id = fee_create_escrow(&t, 10_000_000);
+    t.client.release_escrow(&t.depositor, &id);
+
+    // The treasury receives exactly the fee amount.
+    assert_eq!(token_client.balance(&t.treasury), 200_000);
+}
+
+#[test]
+#[should_panic(expected = "protocol fee cannot exceed 500 bps")]
+fn test_set_protocol_fee_over_500bps_panics() {
+    let t = fee_setup();
+    t.client.set_protocol_fee(&t.admin, &501, &t.treasury);
+}
+
+#[test]
+fn test_get_protocol_fee_returns_configured_values() {
+    let t = fee_setup();
+
+    t.client.set_protocol_fee(&t.admin, &200, &t.treasury);
+    let (fee_bps, treasury, total_collected) = t.client.protocol_fee_stats();
+    assert_eq!(fee_bps, 200);
+    assert_eq!(treasury, t.treasury);
+    assert_eq!(total_collected, 0);
+
+    // After a release, the collected fee total is tracked.
+    let id = fee_create_escrow(&t, 10_000_000);
+    t.client.release_escrow(&t.depositor, &id);
+
+    let (_fee_bps, _treasury, total_collected) = t.client.protocol_fee_stats();
+    assert_eq!(total_collected, 200_000);
+}
+
+#[test]
+fn test_protocol_fee_not_applied_to_refunds() {
+    let t = fee_setup();
+    let token_client = soroban_sdk::token::Client::new(&t.e, &t.token);
+
+    t.client.set_protocol_fee(&t.admin, &200, &t.treasury);
+
+    let id = fee_create_escrow(&t, 10_000_000);
+    t.client.refund_escrow(&t.depositor, &id);
+
+    // Refunds are fee-exempt — the depositor gets everything back.
+    assert_eq!(token_client.balance(&t.depositor), 50_000_000);
+    assert_eq!(token_client.balance(&t.treasury), 0);
+}

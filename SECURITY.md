@@ -9,14 +9,14 @@ Report privately via [GitHub Security Advisories](https://github.com/Lead-Studio
 Include:
 - Affected function(s) or module(s)
 - Steps to reproduce or a proof-of-concept
-- Potential impact
+- Potential impact.
 
 **Response timeline:**
 - Acknowledgment within **48 hours**
 - Triage and severity assessment within **5 days**
 - Patch or mitigation within **14 days** for critical issues
 
-## Scope
+## Scope.
 
 **In scope:**
 - All functions in `src/` and `veritixpay/contract/token/src/`

@@ -261,6 +261,19 @@ fn test_raise_dispute_by_beneficiary_succeeds() {
     let t = setup();
     soroban_sdk::token::StellarAssetClient::new(&t.e, &t.token).mint(&t.depositor, &10_000_000);
     let expiry = t.e.ledger().sequence() + 1000;
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &crate::escrow_test::empty_memo(&t.e),
+    );
+    t.client.raise_dispute(&t.beneficiary, &id);
+    t.client.resolve_dispute(&t.arbiter, &id, &t.beneficiary);
+    assert!(t.client.get_escrow(&id).released);
+}
+
 // ── #695: is_dispute_open ─────────────────────────────────────────────────────
 
 #[test]
@@ -278,8 +291,7 @@ fn test_is_dispute_open_returns_true_when_dispute_is_open() {
         &crate::escrow_test::empty_memo(&t.e),
     );
     t.client.raise_dispute(&t.beneficiary, &id);
-    t.client.resolve_dispute(&t.arbiter, &id, &t.beneficiary);
-    assert!(t.client.get_escrow(&id).released);
+    assert!(t.client.is_dispute_open(&id));
 }
 
 // ── #670: appeal and resolve_appeal ───────────────────────────────────────────
@@ -422,15 +434,17 @@ fn test_expire_dispute_not_disputed_panics() {
     let t = setup();
     soroban_sdk::token::StellarAssetClient::new(&t.e, &t.token).mint(&t.depositor, &10_000_000);
     let expiry = t.e.ledger().sequence() + 1000;
+    let id = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
         &10_000_000,
         &expiry,
         &crate::escrow_test::empty_memo(&t.e),
     );
 
-    assert!(!t.client.is_dispute_open(&id));
-
-    t.client.raise_dispute(&t.depositor, &id);
-    assert!(t.client.is_dispute_open(&id));
+    // Expiring a dispute that was never opened must panic.
+    t.client.expire_dispute(&t.depositor, &id);
 }
 
 #[test]
@@ -447,7 +461,11 @@ fn test_is_dispute_open_returns_false_after_resolution() {
         &expiry,
         &crate::escrow_test::empty_memo(&t.e),
     );
-    t.client.expire_dispute(&t.depositor, &id);
+    t.client.raise_dispute(&t.depositor, &id);
+    assert!(t.client.is_dispute_open(&id));
+
+    t.client.resolve_dispute(&t.arbiter, &id, &t.beneficiary);
+    assert!(!t.client.is_dispute_open(&id));
 }
 
 // ── #672: dispute claimant index (portableDD) ─────────────────────────────────
@@ -514,16 +532,6 @@ fn test_dispute_index_isolation_between_claimants() {
         let disputes = crate::dispute::get_disputes_by_claimant(t.e.clone(), other);
         assert_eq!(disputes.len(), 0);
     });
-        &10_000_000,
-        &expiry,
-        &crate::escrow_test::empty_memo(&t.e),
-    );
-
-    t.client.raise_dispute(&t.depositor, &id);
-    assert!(t.client.is_dispute_open(&id));
-
-    t.client.resolve_dispute(&t.arbiter, &id, &t.beneficiary);
-    assert!(!t.client.is_dispute_open(&id));
 }
 
 #[test]
