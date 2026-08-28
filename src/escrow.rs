@@ -576,11 +576,7 @@ pub fn escrow_stats_for_depositor(e: &Env, depositor: &Address) -> EscrowDeposit
     };
     for i in 0..ids.len() {
         let id = ids.get(i).unwrap();
-        let record: EscrowRecord = e
-            .storage()
-            .persistent()
-            .get(&DataKey::Escrow(id))
-            .unwrap_or_else(|| panic!("escrow {} not found", id));
+        let record = load_record(e, id);
         if record.released {
             stats.released += 1;
         } else if record.refunded {
@@ -591,6 +587,21 @@ pub fn escrow_stats_for_depositor(e: &Env, depositor: &Address) -> EscrowDeposit
         }
     }
     stats
+}
+
+// #738: Return all escrow IDs (active and settled) between a depositor and
+// beneficiary, in creation order, for a full audit trail.
+pub fn get_all_escrows_between(e: Env, depositor: Address, beneficiary: Address) -> Vec<u32> {
+    let escrows = get_escrows_by_depositor(e.clone(), depositor);
+    let mut result = Vec::new(&e);
+    for i in 0..escrows.len() {
+        let id = escrows.get(i).unwrap();
+        let record = load_record(&e, id);
+        if record.beneficiary == beneficiary {
+            result.push_back(id);
+        }
+    }
+    result
 }
 
 pub fn get_escrows_by_beneficiary(e: Env, beneficiary: Address) -> Vec<u32> {
@@ -669,11 +680,7 @@ pub fn escrowed_value_for_depositor(e: &Env, depositor: &Address) -> i128 {
     let mut total = 0_i128;
     for i in 0..escrow_ids.len() {
         let id = escrow_ids.get(i).unwrap();
-        let record: EscrowRecord = e
-            .storage()
-            .persistent()
-            .get(&DataKey::Escrow(id))
-            .unwrap_or_else(|| panic!("escrow {} not found", id));
+        let record: EscrowRecord = load_record(e, id);
 
         if !record.released && !record.refunded {
             total += record.amount - record.released_amount;

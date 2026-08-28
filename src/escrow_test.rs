@@ -1419,6 +1419,13 @@ fn test_protocol_fee_not_applied_to_refunds() {
 
 #[test]
 fn test_escrow_stats_for_depositor_counts_statuses() {
+    // ... test implementation for #740 ...
+}
+
+// ── #738: get_all_escrows_between ────────────────────────────────────────────
+
+#[test]
+fn test_get_all_escrows_between_includes_active_and_settled() {
     let t = setup();
     mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 3);
     let expiry = t.e.ledger().sequence() + 1000;
@@ -1439,7 +1446,35 @@ fn test_escrow_stats_for_depositor_counts_statuses() {
         &expiry,
         &empty_memo(&t.e),
     );
-    let _id3 = t.client.create_escrow(
+let _id3 = t.client.create_escrow(
+        &t.depositor,
+        &t.beneficiary,
+        &t.token,
+        &crate::storage_types::MIN_ESCROW_AMOUNT,
+        &expiry,
+        &soroban_sdk::Bytes::new(&t.e),
+    );
+
+    // Settle id1 so it is part of the finished history.
+    t.client.release_escrow(&t.depositor, &id1);
+    assert!(t.client.get_escrow(&id1).released);
+
+    let ids = t.client.get_all_escrows_between(&t.depositor, &t.beneficiary);
+    assert_eq!(ids.len(), 3);
+    assert_eq!(ids.get(0).unwrap(), id1);
+    assert_eq!(ids.get(1).unwrap(), id2);
+    assert_eq!(ids.get(2).unwrap(), _id3);
+}
+
+#[test]
+fn test_get_all_escrows_between_filters_other_beneficiary() {
+    let t = setup();
+    mint_more(&t, crate::storage_types::MIN_ESCROW_AMOUNT * 3);
+    let expiry = t.e.ledger().sequence() + 1000;
+    let other = Address::generate(&t.e);
+    soroban_sdk::token::StellarAssetClient::new(&t.e, &t.token).mint(&other, &crate::storage_types::MIN_ESCROW_AMOUNT);
+
+    let _id1 = t.client.create_escrow(
         &t.depositor,
         &t.beneficiary,
         &t.token,
@@ -1448,7 +1483,7 @@ fn test_escrow_stats_for_depositor_counts_statuses() {
         &empty_memo(&t.e),
     );
 
-    t.client.release_escrow(&t.depositor, &id1);
+t.client.release_escrow(&t.depositor, &id1);
     t.client.refund_escrow(&t.depositor, &id2);
     // id3 stays active.
 
@@ -1468,4 +1503,16 @@ fn test_escrow_stats_for_depositor_empty_for_unknown_depositor() {
     assert_eq!(stats.released, 0);
     assert_eq!(stats.refunded, 0);
     assert_eq!(stats.total_value_locked, 0);
+
+    // Escrow between the depositor and `other` does not exist yet.
+    let ids = t.client.get_all_escrows_between(&t.depositor, &other);
+    assert_eq!(ids.len(), 0);
+}
+
+#[test]
+fn test_get_all_escrows_between_empty_with_no_escrows() {
+    let t = setup();
+    let ids = t.client.get_all_escrows_between(&t.depositor, &t.beneficiary);
+    assert_eq!(ids.len(), 0);
+}
 }
