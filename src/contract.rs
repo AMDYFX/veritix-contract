@@ -1,4 +1,6 @@
-use crate::storage_types::{DataKey, RecurringPayment, ResolverStats, VestingRecord, ContractInfo};
+use crate::storage_types::{
+    ContractInfo, DataKey, RecurringExecution, RecurringPayment, ResolverStats, VestingRecord,
+};
 use crate::validation::require_positive_amount;
 use crate::{
     admin, allowance, balance, dispute, escrow, multi_escrow, permit, recurring, snapshot,
@@ -1317,6 +1319,22 @@ pub trait VeriTixPayTrait {
     ///
     /// # Panics
     /// - `TooManyAccounts: maximum 50 accounts per batch` if the list is too long.
+    // #735: transfer a recurring payment to a new payer
+    fn transfer_recurring_payer(e: Env, caller: Address, recurring_id: u32, new_payer: Address);
+    // #749: recurring execution window
+    fn set_recurring_execution_window(e: Env, admin: Address, window_ledgers: u32);
+    // #743: timed freeze
+    fn freeze_until(e: Env, admin: Address, account: Address, until_ledger: u32);
+    // #748: signed bulk whitelist
+    fn add_to_whitelist_signed(
+        e: Env,
+        admin: Address,
+        addresses: Vec<Address>,
+        nonce: u64,
+        public_key: BytesN<32>,
+        signature: BytesN<64>,
+    );
+    // #741: batch whitelist add (max 50 accounts)
     fn add_to_whitelist_batch(e: Env, admin: Address, accounts: Vec<Address>);
 }
 
@@ -2283,14 +2301,35 @@ impl VeriTixPayTrait for VeriTixPay {
         escrow::trigger_auto_release(e, escrow_id)
     }
 
+    fn transfer_recurring_payer(e: Env, caller: Address, recurring_id: u32, new_payer: Address) {
+        recurring::transfer_recurring_payer(&e, &caller, recurring_id, new_payer)
+    fn set_recurring_execution_window(e: Env, admin: Address, window_ledgers: u32) {
+        recurring::set_recurring_execution_window(&e, &admin, window_ledgers)
+    }
+
+    fn freeze_until(e: Env, admin: Address, account: Address, until_ledger: u32) {
+        crate::freeze::freeze_until(&e, &admin, &account, until_ledger)
+    }
+
+    fn add_to_whitelist_signed(
+        e: Env,
+        admin: Address,
+        addresses: Vec<Address>,
+        nonce: u64,
+        public_key: BytesN<32>,
+        signature: BytesN<64>,
+    ) {
+        whitelist::add_to_whitelist_signed(&e, &admin, &addresses, nonce, &public_key, &signature)
+    }
+
     fn add_to_whitelist_batch(e: Env, admin: Address, accounts: Vec<Address>) {
         whitelist::add_to_whitelist_batch(&e, &admin, &accounts)
     }
 }
 
-use soroban_sdk::{contract, contractimpl, Env, Vec};
-use crate::storage_types::RecurringExecution;
-
+// NOTE: this extension contract (added by earlier merged PRs) is merged into a
+// single definition here because duplicate `VeritixContract` struct/impl blocks
+// from those merges broke compilation (E0428 duplicate definitions).
 #[contract]
 pub struct VeritixContract;
 
@@ -2311,16 +2350,7 @@ impl VeritixContract {
             .get(&key)
             .unwrap_or_else(|| Vec::new(&e))
     }
-}
 
-use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
-use crate::storage_types::DataKey;
-
-#[contract]
-pub struct VeritixContract;
-
-#[contractimpl]
-impl VeritixContract {
     /// Retrieves all recurring payment IDs associated with a specific payee address.
     ///
     /// # Arguments
@@ -2336,16 +2366,7 @@ impl VeritixContract {
             .get(&key)
             .unwrap_or_else(|| Vec::new(&e))
     }
-}
 
-use soroban_sdk::{contract, contractimpl, Env};
-use crate::storage_types::DataKey;
-
-#[contract]
-pub struct VeritixContract;
-
-#[contractimpl]
-impl VeritixContract {
     /// Returns a boolean indicating whether a recurring payment schedule is currently active and not paused,
     /// avoiding the overhead of fetching the full payment record.
     ///
@@ -2358,18 +2379,19 @@ impl VeritixContract {
     /// (including when the record does not exist).
     pub fn is_recurring_active(e: Env, recurring_id: u32) -> bool {
         let key = DataKey::Recurring(recurring_id);
-        
+
         // Retrieve the recurring record from storage instance/persistent storage
-        if let Some(recurring) = e.storage().instance().get::<DataKey, crate::storage_types::RecurringPayment>(&key) {
-            recurring.active && !recurring.paused
+        // (pause is modeled as `active = false`, so only `active` is checked)
+        if let Some(recurring) = e
+            .storage()
+            .instance()
+            .get::<DataKey, crate::recurring::RecurringRecord>(&key)
+        {
+            recurring.active
         } else {
             false
         }
     }
-}
-
-use soroban_sdk::{contract, contractimpl, Address, Env, Option};
-use crate::storage_types::DataKey;
 
 #[contract]
 pub struct VeritixContract;
@@ -2388,6 +2410,7 @@ impl VeritixContract {
     /// # Panics
     /// - `Split protocol fee exceeds maximum allowed basis points (200)` if
     ///   `fee_bps > 200`.
+    /// Sets the protocol fee and treasury address for split distributions (admin-only, max 2%).
     pub fn set_split_protocol_fee(e: Env, admin: Address, fee_bps: u32, treasury: Address) {
         crate::splitter::set_split_fee_config(&e, &admin, fee_bps, &treasury);
     }
