@@ -19,6 +19,10 @@ for contract upgrades.
 - Pre-commit hook (`make install-hooks`) running `cargo fmt` and `cargo clippy` before every commit.
 - CHANGELOG.md tracking all significant changes per release.
 - Inline doc comments explaining the purpose of each test scenario across all test files.
+- Inline `///` rustdoc for every public function in `src/contract.rs` (one-line
+  summary, `# Arguments`, `# Panics`, and `# Example`).
+- Error code catalog (`docs/error-codes.md`) mapping every panic string to its
+  module, cause, and recommended caller handling.
 - Architecture document (`docs/architecture.md`) covering module responsibilities,
   data flow, storage layout, auth model, events, and integration points.
 - `add_to_whitelist_batch` — whitelist up to 50 accounts in a single admin call.
