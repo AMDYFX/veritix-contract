@@ -297,6 +297,62 @@ pub fn get_recurring_by_payer(e: &Env, payer: &Address) -> Vec<u32> {
         .unwrap_or(Vec::new(e))
 }
 
+/// #735: transfer a recurring payment to a new payer. Both the current payer
+/// and the new payer must authenticate, and the payer index is updated so the
+/// recurring id shows up under the new payer.
+pub fn transfer_recurring_payer(e: &Env, caller: &Address, recurring_id: u32, new_payer: Address) {
+    caller.require_auth();
+
+    let mut record: RecurringRecord = e
+        .storage()
+        .persistent()
+        .get(&DataKey::Recurring(recurring_id))
+        .expect("recurring not found");
+    assert!(record.payer == *caller, "not the payer");
+    assert!(record.active, "recurring is not active");
+    // Reject a no-op transfer before authenticating the new payer (the host
+    // rejects double-auth of the same address, so this must be checked first).
+    assert!(
+        record.payer != new_payer,
+        "new payer must differ from current payer"
+    );
+    new_payer.require_auth();
+
+    // Remove the id from the old payer's index.
+    let old_index = DataKey::PayerRecurrings(record.payer.clone());
+    if let Some(ids) = e.storage().persistent().get::<_, Vec<u32>>(&old_index) {
+        let mut updated: Vec<u32> = Vec::new(e);
+        for i in 0..ids.len() {
+            let v = ids.get(i).unwrap();
+            if v != recurring_id {
+                updated.push_back(v);
+            }
+        }
+        e.storage().persistent().set(&old_index, &updated);
+    }
+
+    record.payer = new_payer.clone();
+    e.storage()
+        .persistent()
+        .set(&DataKey::Recurring(recurring_id), &record);
+
+    // Add the id to the new payer's index.
+    let mut payer_ids: Vec<u32> = e
+        .storage()
+        .persistent()
+        .get(&DataKey::PayerRecurrings(new_payer.clone()))
+        .unwrap_or(Vec::new(e));
+    payer_ids.push_back(recurring_id);
+    e.storage()
+        .persistent()
+        .set(&DataKey::PayerRecurrings(new_payer), &payer_ids);
+
+    e.events().publish(
+        (soroban_sdk::symbol_short!("rcr_pyr"), caller.clone(), record.payer.clone()),
+        recurring_id,
+    );
+}
+
 pub fn record_execution(e: &Env, recurring_id: u32, amount: i128) {
     let ledger = e.ledger().sequence();
     let execution = RecurringExecution {

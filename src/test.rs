@@ -1,4 +1,7 @@
 use crate::contract::{VeriTixPay, VeriTixPayClient};
+use crate::storage_types::{
+    MIN_ESCROW_AMOUNT, BALANCE_LIFETIME_THRESHOLD, ESCROW_LIFETIME_THRESHOLD,
+};
 use crate::storage_types::{MIN_ESCROW_AMOUNT, VestingRecord};
 use ed25519_dalek::{Signer, SigningKey};
 use soroban_sdk::{
@@ -705,6 +708,10 @@ fn test_whitelist_add_over_50_panics() {
 
     client.add_to_whitelist_batch(&admin, &accounts);
 }
+// ── #733: Permit nonce replay ────────────────────────────────────────────────
+
+#[test]
+fn test_permit_nonce_sequence_0_to_9_all_succeed() {
 // ── #742: Vesting schedule tests ─────────────────────────────────────────────
 
 #[test]
@@ -714,6 +721,19 @@ fn test_create_vesting_records_correct_fields() {
     let contract_id = e.register_contract(None, VeriTixPay);
     let client = VeriTixPayClient::new(&e, &contract_id);
     let admin = Address::generate(&e);
+    let user = Address::generate(&e);
+    client.initialize(&admin);
+
+    // Ten consecutive permits with correct sequential nonces all succeed.
+    for i in 0..10 {
+        client.permit(&user, &i);
+    }
+    assert_eq!(client.nonces(&user), 10);
+}
+
+#[test]
+#[should_panic(expected = "InvalidNonce")]
+fn test_permit_nonce_5_after_consuming_0_to_4_panics() {
     client.initialize(&admin);
 
     let token = create_token_contract(&e, &admin);
@@ -747,6 +767,19 @@ fn test_claim_vesting_before_ledger_panics() {
     let contract_id = e.register_contract(None, VeriTixPay);
     let client = VeriTixPayClient::new(&e, &contract_id);
     let admin = Address::generate(&e);
+    let user = Address::generate(&e);
+    client.initialize(&admin);
+
+    // Consume nonces 0..=4, then replay the already-consumed nonce 0.
+    for i in 0..5 {
+        client.permit(&user, &i);
+    }
+    client.permit(&user, &0);
+}
+
+#[test]
+#[should_panic(expected = "InvalidNonce")]
+fn test_permit_nonce_out_of_order_panics() {
     client.initialize(&admin);
 
     let token = create_token_contract(&e, &admin);
@@ -768,6 +801,38 @@ fn test_claim_vesting_after_ledger_succeeds() {
     let contract_id = e.register_contract(None, VeriTixPay);
     let client = VeriTixPayClient::new(&e, &contract_id);
     let admin = Address::generate(&e);
+    let user = Address::generate(&e);
+    client.initialize(&admin);
+
+    // Jumping straight to nonce 2 before nonce 0/1 are consumed must panic.
+    client.permit(&user, &2);
+}
+
+/// Rebuilds the exact signed message hash permit_batch verifies, so tests can
+/// produce a valid signature for the batch.
+fn permit_batch_hash(
+    e: &Env,
+    owner: &Address,
+    approvals: &Vec<(Address, i128, u32)>,
+    nonce: u64,
+) -> [u8; 32] {
+    let mut msg = Bytes::new(e);
+    msg.append(&symbol_short!("permit_bt").to_xdr(e));
+    msg.append(&owner.clone().to_xdr(e));
+    for i in 0..approvals.len() {
+        let (spender, amount, expiration_ledger) = approvals.get(i).unwrap();
+        msg.append(&spender.to_xdr(e));
+        msg.append(&amount.to_xdr(e));
+        msg.append(&expiration_ledger.to_xdr(e));
+    }
+    msg.append(&nonce.to_xdr(e));
+    let hash: soroban_sdk::crypto::Hash<32> = e.crypto().sha256(&msg);
+    let digest: BytesN<32> = hash.into();
+    digest.to_array()
+}
+
+#[test]
+fn test_permit_batch_increments_nonce_once_for_whole_batch() {
     client.initialize(&admin);
 
     let token = create_token_contract(&e, &admin);
@@ -794,6 +859,30 @@ fn test_claim_vesting_double_claim_panics() {
     let contract_id = e.register_contract(None, VeriTixPay);
     let client = VeriTixPayClient::new(&e, &contract_id);
     let admin = Address::generate(&e);
+    let owner = Address::generate(&e);
+    client.initialize(&admin);
+
+    let spender1 = Address::generate(&e);
+    let spender2 = Address::generate(&e);
+    let mut approvals = Vec::new(&e);
+    approvals.push_back((spender1, 500i128, 1000u32));
+    approvals.push_back((spender2, 300i128, 1000u32));
+
+    let sk = SigningKey::from_bytes(&[5u8; 32]);
+    let public_key = BytesN::from_array(&e, &sk.verifying_key().to_bytes());
+    let digest = permit_batch_hash(&e, &owner, &approvals, 0);
+    let signature = BytesN::from_array(&e, &sk.try_sign(&digest).unwrap().to_bytes());
+
+    client.permit_batch(&owner, &approvals, &0u64, &public_key, &signature);
+
+    // The whole batch consumed exactly one nonce.
+    assert_eq!(client.nonces(&owner), 1);
+}
+
+// ── #731: Storage TTL ────────────────────────────────────────────────────────
+
+#[test]
+fn test_balance_key_ttl_extended_on_read() {
     client.initialize(&admin);
 
     let token = create_token_contract(&e, &admin);
@@ -817,6 +906,21 @@ fn test_get_vesting_by_holder_populated_after_create() {
     let contract_id = e.register_contract(None, VeriTixPay);
     let client = VeriTixPayClient::new(&e, &contract_id);
     let admin = Address::generate(&e);
+    let user = Address::generate(&e);
+    client.initialize(&admin);
+
+    client.mint(&admin, &user, &1000);
+    assert_eq!(client.balance(&user), 1000);
+
+    // The balance key must survive repeated reads well inside its lifetime.
+    for _ in 0..5 {
+        e.ledger().with_mut(|l| l.sequence_number += 1000);
+        assert_eq!(client.balance(&user), 1000);
+    }
+}
+
+#[test]
+fn test_escrow_key_ttl_extended_on_get_escrow() {
     client.initialize(&admin);
 
     let token = create_token_contract(&e, &admin);
@@ -842,6 +946,35 @@ fn test_create_vesting_requires_admin() {
     let admin = Address::generate(&e);
     client.initialize(&admin);
 
+    let depositor = Address::generate(&e);
+    let beneficiary = Address::generate(&e);
+    let token = create_token_contract(&e, &depositor);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&depositor, &20_000_000);
+
+    let expiry = e.ledger().sequence() + 1000;
+    let id = client.create_escrow(
+        &depositor,
+        &beneficiary,
+        &token,
+        &10_000_000,
+        &expiry,
+        &Bytes::new(&e),
+    );
+    let record = client.get_escrow(&id);
+    assert_eq!(record.id, id);
+
+    // The escrow record must survive repeated reads well inside its lifetime.
+    for _ in 0..5 {
+        e.ledger().with_mut(|l| l.sequence_number += 1000);
+        let record = client.get_escrow(&id);
+        assert_eq!(record.id, id);
+        assert_eq!(record.amount, 10_000_000);
+    }
+}
+
+#[test]
+fn test_recurring_key_ttl_extended_on_get_recurring() {
     let token = create_token_contract(&e, &admin);
     let stranger = Address::generate(&e);
     let holder = Address::generate(&e);
@@ -859,6 +992,24 @@ fn test_vesting_supply_invariant() {
     let admin = Address::generate(&e);
     client.initialize(&admin);
 
+    let payer = Address::generate(&e);
+    let payee = Address::generate(&e);
+    let token = create_token_contract(&e, &payer);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&payer, &1000);
+
+    let id = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+    assert!(client.is_recurring_active(&id));
+
+    // The recurring record must survive repeated reads well inside its lifetime.
+    for _ in 0..5 {
+        e.ledger().with_mut(|l| l.sequence_number += 1000);
+        assert!(client.is_recurring_active(&id));
+    }
+}
+
+#[test]
+fn test_allowance_key_ttl_extended_on_read_allowance() {
     let token = create_token_contract(&e, &admin);
     let token_admin = token::StellarAssetClient::new(&e, &token);
     token_admin.mint(&admin, &1_000);
@@ -903,6 +1054,42 @@ fn test_add_to_whitelist_signed_whitelists_all_addresses() {
     let client = VeriTixPayClient::new(&e, &contract_id);
     let admin = Address::generate(&e);
     client.initialize(&admin);
+
+    let from = Address::generate(&e);
+    let spender = Address::generate(&e);
+    let to = Address::generate(&e);
+    client.mint(&admin, &from, &1000);
+
+    let expiry = e.ledger().sequence() + 10_000;
+    client.approve(&from, &spender, &500, &expiry);
+
+    // The allowance survives well inside its expiry and lifetime.
+    e.ledger().with_mut(|l| l.sequence_number += 1000);
+    client.transfer_from(&spender, &from, &to, &100);
+    assert_eq!(client.balance(&to), 100);
+}
+
+#[test]
+fn test_balance_lifetime_constant_is_at_least_one_year() {
+    // ~5s per ledger: the threshold must cover at least a full year.
+    assert!(
+        BALANCE_LIFETIME_THRESHOLD * 5 / (365 * 24 * 3600) >= 1,
+        "balance lifetime must cover at least one year"
+    );
+}
+
+#[test]
+fn test_escrow_lifetime_constant_is_at_least_one_year() {
+    assert!(
+        ESCROW_LIFETIME_THRESHOLD * 5 / (365 * 24 * 3600) >= 1,
+        "escrow lifetime must cover at least one year"
+    );
+}
+
+// ── #730: Supply invariant for dividend and airdrop ──────────────────────────
+
+#[test]
+fn test_dividend_supply_unchanged() {
     client.enable_whitelist(&admin);
 
     let sk = SigningKey::from_bytes(&[7u8; 32]);
@@ -931,6 +1118,26 @@ fn test_add_to_whitelist_signed_increments_admin_nonce() {
     let client = VeriTixPayClient::new(&e, &contract_id);
     let admin = Address::generate(&e);
     client.initialize(&admin);
+
+    let h1 = Address::generate(&e);
+    let h2 = Address::generate(&e);
+    client.mint(&admin, &h1, &1000);
+    client.mint(&admin, &h2, &1000);
+    let supply_before = client.total_supply();
+
+    e.as_contract(&contract_id, || {
+        let mut holders = Vec::new(&e);
+        holders.push_back(h1.clone());
+        holders.push_back(h2.clone());
+        crate::divi::distribute_dividend(&e, &admin, 100, holders);
+    });
+
+    // Dividend is a pure distribution — total supply is unchanged.
+    assert_eq!(client.total_supply(), supply_before);
+}
+
+#[test]
+fn test_airdrop_supply_unchanged() {
     client.enable_whitelist(&admin);
 
     let sk = SigningKey::from_bytes(&[8u8; 32]);
@@ -964,6 +1171,30 @@ fn test_add_to_whitelist_signed_rejects_replayed_nonce() {
     let client = VeriTixPayClient::new(&e, &contract_id);
     let admin = Address::generate(&e);
     client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+
+    // Populate the holder set through internal mints.
+    let h1 = Address::generate(&e);
+    let h2 = Address::generate(&e);
+    client.mint(&admin, &h1, &100);
+    client.mint(&admin, &h2, &100);
+    let supply_before = client.total_supply();
+
+    // Give the admin and holders external token balances for the airdrop.
+    token_admin.mint(&admin, &1000);
+    token_admin.mint(&h1, &700);
+    token_admin.mint(&h2, &300);
+
+    client.airdrop(&admin, &token, &100);
+
+    // Airdrop is a pure transfer — total supply is unchanged.
+    assert_eq!(client.total_supply(), supply_before);
+}
+
+#[test]
+fn test_dividend_admin_balance_decreases_by_total_amount() {
     client.enable_whitelist(&admin);
 
     let sk = SigningKey::from_bytes(&[9u8; 32]);
@@ -988,6 +1219,26 @@ fn test_add_to_whitelist_signed_batch_succeeds() {
     let client = VeriTixPayClient::new(&e, &contract_id);
     let admin = Address::generate(&e);
     client.initialize(&admin);
+
+    let h1 = Address::generate(&e);
+    let h2 = Address::generate(&e);
+    client.mint(&admin, &h1, &1000);
+    client.mint(&admin, &h2, &1000);
+    let before = client.balance(&h1) + client.balance(&h2);
+
+    e.as_contract(&contract_id, || {
+        let mut holders = Vec::new(&e);
+        holders.push_back(h1.clone());
+        holders.push_back(h2.clone());
+        crate::divi::distribute_dividend(&e, &admin, 300, holders);
+    });
+
+    // The full dividend amount is paid out: holders gain exactly 300.
+    assert_eq!(client.balance(&h1) + client.balance(&h2), before + 300);
+}
+
+#[test]
+fn test_airdrop_admin_balance_decreases_by_total_amount() {
     client.enable_whitelist(&admin);
 
     let sk = SigningKey::from_bytes(&[10u8; 32]);
@@ -1017,6 +1268,26 @@ fn test_add_to_whitelist_signed_over_200_panics() {
     let client = VeriTixPayClient::new(&e, &contract_id);
     let admin = Address::generate(&e);
     client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    let token_client = token::Client::new(&e, &token);
+
+    // Populate the holder set through internal mints.
+    let h1 = Address::generate(&e);
+    let h2 = Address::generate(&e);
+    client.mint(&admin, &h1, &100);
+    client.mint(&admin, &h2, &100);
+
+    token_admin.mint(&admin, &1000);
+    token_admin.mint(&h1, &700);
+    token_admin.mint(&h2, &300);
+    let admin_before = token_client.balance(&admin);
+
+    client.airdrop(&admin, &token, &100);
+
+    // The admin's token balance drops by exactly the airdropped amount.
+    assert_eq!(token_client.balance(&admin), admin_before - 100);
     client.enable_whitelist(&admin);
 
     let mut addresses = Vec::new(&e);

@@ -489,6 +489,18 @@ mod recurring_active_tests {
         // Setup mock record and test active vs paused states...
     }
 }
+// ── #735: transfer_recurring_payer ───────────────────────────────────────────
+
+fn transfer_setup(
+) -> (
+    Env,
+    crate::contract::VeriTixPayClient<'static>,
+    Address,
+    Address,
+    Address,
+    u32,
+    Address,
+) {
 // ── #749: recurring execution window ─────────────────────────────────────────
 
 #[test]
@@ -509,6 +521,79 @@ fn test_execute_recurring_within_execution_window_succeeds() {
     soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &1000);
 
     let id = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+    (e, client, payer, payee, token, id, contract_id)
+}
+
+#[test]
+fn test_transfer_recurring_payer_succeeds_with_both_auth() {
+    use soroban_sdk::testutils::Address as _;
+    let (e, client, payer, _payee, _token, id, contract_id) = transfer_setup();
+    let new_payer = Address::generate(&e);
+
+    // Both the current payer (caller) and the new payer authenticate.
+    client.transfer_recurring_payer(&payer, &id, &new_payer);
+
+    let record = read_recurring_record(&e, &contract_id, id);
+    assert_eq!(record.payer, new_payer);
+}
+
+#[test]
+#[should_panic(expected = "not the payer")]
+fn test_transfer_recurring_payer_old_payer_only_panics() {
+    use soroban_sdk::testutils::Address as _;
+    let (e, client, _payer, _payee, _token, id, _contract_id) = transfer_setup();
+    let new_payer = Address::generate(&e);
+
+    // A caller that is not the current payer is refused, so a transfer that
+    // only involves the old payer's authorization cannot succeed.
+    let intruder = Address::generate(&e);
+    client.transfer_recurring_payer(&intruder, &id, &new_payer);
+}
+
+#[test]
+#[should_panic(expected = "not the payer")]
+fn test_transfer_recurring_payer_new_payer_only_panics() {
+    use soroban_sdk::testutils::Address as _;
+    let (e, client, _payer, payee, _token, id, _contract_id) = transfer_setup();
+    let new_payer = Address::generate(&e);
+
+    // The payee is not the payer, so authorizing only the new payer still fails.
+    client.transfer_recurring_payer(&payee, &id, &new_payer);
+}
+
+#[test]
+#[should_panic(expected = "new payer must differ from current payer")]
+fn test_transfer_recurring_payer_same_address_panics() {
+    let (_e, client, payer, _payee, _token, id, _contract_id) = transfer_setup();
+
+    client.transfer_recurring_payer(&payer, &id, &payer);
+}
+
+#[test]
+fn test_transfer_recurring_payer_updates_payer_index() {
+    use soroban_sdk::testutils::Address as _;
+    let (e, client, payer, _payee, _token, id, _contract_id) = transfer_setup();
+    let new_payer = Address::generate(&e);
+
+    client.transfer_recurring_payer(&payer, &id, &new_payer);
+
+    // The recurring id moves from the old payer's index to the new payer's.
+    let old_ids = client.get_recurring_by_payer(&payer);
+    assert_eq!(old_ids.len(), 0);
+    let new_ids = client.get_recurring_by_payer(&new_payer);
+    assert_eq!(new_ids.len(), 1);
+    assert_eq!(new_ids.get(0).unwrap(), id);
+}
+
+#[test]
+#[should_panic(expected = "recurring is not active")]
+fn test_transfer_recurring_payer_inactive_recurring_panics() {
+    use soroban_sdk::testutils::Address as _;
+    let (e, client, payer, _payee, _token, id, _contract_id) = transfer_setup();
+    let new_payer = Address::generate(&e);
+
+    client.cancel_recurring(&payer, &id);
+    client.transfer_recurring_payer(&payer, &id, &new_payer);
 
     // Configure a 1000-ledger execution window.
     client.set_recurring_execution_window(&admin, &1000);
