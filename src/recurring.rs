@@ -1,4 +1,4 @@
-use crate::storage_types::{DataKey, RecurringPayment};
+use crate::storage_types::{DataKey, RecurringExecution, RecurringPayment};
 use soroban_sdk::{contracttype, token, Address, Env, Vec};
 
 #[contracttype]
@@ -90,6 +90,20 @@ pub fn execute_recurring(e: &Env, recurring_id: u32) {
         .expect("overflow");
     assert!(e.ledger().sequence() >= next_due, "not yet due");
 
+    // #749: if an execution window is configured, refuse executions that happen
+    // too far past the due date (e.g. a keeper bot that was down for a month).
+    let execution_window: u32 = e
+        .storage()
+        .persistent()
+        .get(&DataKey::RecurringExecutionWindow)
+        .unwrap_or(0);
+    if execution_window > 0 {
+        let deadline = next_due.checked_add(execution_window).expect("overflow");
+        if e.ledger().sequence() > deadline {
+            panic!("ExecutionWindowExpired: payment opportunity has passed");
+        }
+    }
+
     record.payer.require_auth();
 
     let token_client = token::Client::new(e, &record.token);
@@ -176,6 +190,15 @@ pub fn recurring_ids_for_payee(e: Env, payee: Address) -> soroban_sdk::Vec<u32> 
         .persistent()
         .get(&DataKey::PayeeRecurrings(payee))
         .unwrap_or(soroban_sdk::Vec::new(&e))
+}
+
+/// #749: admin-only global setting for how many ledgers past the due date an
+/// execution is still allowed. A window of 0 disables the limit entirely.
+pub fn set_recurring_execution_window(e: &Env, admin: &Address, window_ledgers: u32) {
+    crate::admin::check_admin(e, admin);
+    e.storage()
+        .persistent()
+        .set(&DataKey::RecurringExecutionWindow, &window_ledgers);
 }
 
 pub fn cancel_recurring_batch(e: &Env, caller: &Address, recurring_ids: Vec<u32>) {
@@ -274,9 +297,6 @@ pub fn get_recurring_by_payer(e: &Env, payer: &Address) -> Vec<u32> {
         .unwrap_or(Vec::new(e))
 }
 
-use soroban_sdk::{Env, Vec};
-use crate::storage_types::{DataKey, RecurringExecution};
-
 pub fn record_execution(e: &Env, recurring_id: u32, amount: i128) {
     let ledger = e.ledger().sequence();
     let execution = RecurringExecution {
@@ -295,9 +315,6 @@ pub fn record_execution(e: &Env, recurring_id: u32, amount: i128) {
     history.push_back(execution);
     e.storage().instance().set(&key, &history);
 }
-
-use soroban_sdk::{Address, Env, Vec};
-use crate::storage_types::DataKey;
 
 pub fn index_recurring_for_payee(e: &Env, payee: &Address, recurring_id: u32) {
     let key = DataKey::PayeeRecurrings(payee.clone());
