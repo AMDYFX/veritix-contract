@@ -1,5 +1,6 @@
 use crate::storage_types::{
-    ContractInfo, DataKey, RecurringExecution, RecurringPayment, ResolverStats, VestingRecord,
+    ContractInfo, DataKey, DisputeStats, EscrowDepositorStats, FullTokenInfo, RecurringExecution,
+    RecurringPayment, ResolverStats, VestingRecord,
 };
 use crate::validation::require_positive_amount;
 use crate::{
@@ -675,6 +676,7 @@ pub trait VeriTixPayTrait {
     /// # Arguments
     /// - `e` — contract environment (auto-injected).
     fn is_paused(e: Env) -> bool;
+    fn contract_paused_for(e: Env) -> Option<u32>;
 
     // ── Permit / Nonce ────────────────────────────────────────────────────────
     /// Consumes the current nonce for `user`, replay-protecting subsequent
@@ -704,6 +706,9 @@ pub trait VeriTixPayTrait {
     /// - `e` — contract environment (auto-injected).
     /// - `resolver` — the arbiter/resolver to query.
     fn resolver_stats(e: Env, resolver: Address) -> ResolverStats;
+    fn dispute_stats(e: Env) -> DisputeStats;
+    fn full_token_info(e: Env) -> FullTokenInfo;
+    fn escrow_stats_for_depositor(e: Env, depositor: Address) -> EscrowDepositorStats;
 
     // ── #454: Protocol fee stats ─────────────────────────────────────────────
     /// Returns protocol fee configuration: fee basis points, treasury address,
@@ -997,6 +1002,8 @@ pub trait VeriTixPayTrait {
     /// # Panics
     /// - `no escrow found between the two addresses` if no shared escrow exists.
     fn escrow_between(e: Env, addr1: Address, addr2: Address) -> u32;
+
+    fn get_all_escrows_between(e: Env, depositor: Address, beneficiary: Address) -> Vec<u32>;
 
     /// Cancels up to 20 recurring payments in one call. The payer authenticates.
     ///
@@ -1715,6 +1722,10 @@ impl VeriTixPayTrait for VeriTixPay {
             .unwrap_or(false)
     }
 
+    fn contract_paused_for(e: Env) -> Option<u32> {
+        crate::pause::contract_paused_for(&e)
+    }
+
     // ── Permit / Nonce ────────────────────────────────────────────────────────
 
     fn permit(e: Env, user: Address, nonce: u32) {
@@ -1800,6 +1811,10 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn escrow_between(e: Env, addr1: Address, addr2: Address) -> u32 {
         escrow::escrow_between(e, addr1, addr2)
+    }
+
+    fn get_all_escrows_between(e: Env, depositor: Address, beneficiary: Address) -> Vec<u32> {
+        escrow::get_all_escrows_between(e, depositor, beneficiary)
     }
 
     fn cancel_recurring_batch(e: Env, caller: Address, recurring_ids: Vec<u32>) {
@@ -1974,6 +1989,28 @@ impl VeriTixPayTrait for VeriTixPay {
         let initialized_at_ledger: u32 =
             e.storage().persistent().get(&DataKey::InitializedAtLedger).unwrap_or(0);
         ContractInfo { version, admin, is_paused, initialized_at_ledger }
+    }
+
+    fn dispute_stats(e: Env) -> DisputeStats {
+        crate::dispute::get_dispute_stats(&e)
+    }
+
+    fn full_token_info(e: Env) -> FullTokenInfo {
+        let version: soroban_sdk::String =
+            e.storage().persistent().get(&DataKey::Version).unwrap_or(String::from_str(&e, "1.0.0"));
+        let max_supply: i128 = e.storage().persistent().get(&DataKey::MaxSupply).unwrap_or(i128::MAX);
+        FullTokenInfo {
+            name: soroban_sdk::String::from_str(&e, "VeriTix"),
+            symbol: soroban_sdk::String::from_str(&e, "VTX"),
+            decimal: 7,
+            total_supply: balance::read_supply(&e),
+            max_supply,
+            version,
+        }
+    }
+
+    fn escrow_stats_for_depositor(e: Env, depositor: Address) -> EscrowDepositorStats {
+        crate::escrow::escrow_stats_for_depositor(&e, &depositor)
     }
 
     fn contract_summary(e: Env) -> ContractSummary {
@@ -2330,6 +2367,9 @@ impl VeriTixPayTrait for VeriTixPay {
 
 use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 use crate::storage_types::DataKey;
+// #773: Auxiliary contract exposing recurring history/payee views and split fee
+// configuration. The four separate contract blocks merged in #773 are
+// consolidated here so the crate compiles.
 // NOTE: this extension contract (added by earlier merged PRs) is merged into a
 // single definition here because duplicate `VeritixContract` struct/impl blocks
 // from those merges broke compilation (E0428 duplicate definitions).
@@ -2351,10 +2391,7 @@ impl VeritixContract {
     /// A vector of [`RecurringExecution`] entries (empty if none recorded).
     pub fn get_recurring_history(e: Env, recurring_id: u32) -> Vec<RecurringExecution> {
         let key = DataKey::RecurringHistory(recurring_id);
-        e.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(&e))
+        e.storage().instance().get(&key).unwrap_or_else(|| Vec::new(&e))
     }
 
     /// Retrieves all recurring payment IDs associated with a specific payee address.
@@ -2367,10 +2404,7 @@ impl VeritixContract {
     /// A vector of recurring payment IDs (empty if none exist).
     pub fn get_recurring_by_payee(e: Env, payee: Address) -> Vec<u32> {
         let key = DataKey::PayeeRecurrings(payee);
-        e.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(&e))
+        e.storage().instance().get(&key).unwrap_or_else(|| Vec::new(&e))
     }
 
     /// Returns a boolean indicating whether a recurring payment schedule is currently active and not paused,

@@ -1,13 +1,15 @@
 use crate::contract::{VeriTixPay, VeriTixPayClient};
 use crate::storage_types::{
-    MIN_ESCROW_AMOUNT, BALANCE_LIFETIME_THRESHOLD, ESCROW_LIFETIME_THRESHOLD,
+    DataKey, VestingRecord, BALANCE_LIFETIME_THRESHOLD, ESCROW_LIFETIME_THRESHOLD,
+    MIN_ESCROW_AMOUNT,
 };
-use crate::storage_types::{MIN_ESCROW_AMOUNT, VestingRecord};
 use ed25519_dalek::{Signer, SigningKey};
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Ledger},
-    token, xdr::ToXdr, Address, Bytes, BytesN, Env, Vec,
+    token,
+    xdr::ToXdr,
+    Address, Bytes, BytesN, Env, Vec,
 };
 
 pub fn create_token_contract(e: &Env, admin: &Address) -> Address {
@@ -303,7 +305,7 @@ fn test_balance_key_without_bump_expires_and_returns_zero() {
 
     e.ledger().with_mut(|l| {
         l.sequence_number =
-            l.sequence_number + crate::storage_types::BALANCE_LIFETIME_THRESHOLD + 1;
+            l.sequence_number + BALANCE_LIFETIME_THRESHOLD + 1;
     });
 
     let bal = client.balance(&user);
@@ -336,7 +338,7 @@ fn test_escrow_record_expiry_simulation() {
     );
 
     e.ledger().with_mut(|l| {
-        l.sequence_number = l.sequence_number + crate::storage_types::ESCROW_LIFETIME_THRESHOLD + 1;
+        l.sequence_number = l.sequence_number + ESCROW_LIFETIME_THRESHOLD + 1;
     });
 
     let _settled = client.is_escrow_settled(&id);
@@ -363,7 +365,7 @@ fn test_allowance_expiry_simulation() {
     let _allowance_exists =
         e.storage()
             .persistent()
-            .has(&crate::storage_types::DataKey::Allowance(
+            .has(&DataKey::Allowance(
                 from.clone(),
                 spender.clone(),
             ));
@@ -446,11 +448,6 @@ fn test_initialize_twice_panics() {
     client.initialize(&admin);
 }
 
-// NOTE: the historical supply-invariant test was dropped because
-// `transfer_with_memo` self-calls the contract's own `transfer`, which the host
-// rejects ("Contract re-entry is not allowed"), so no end-to-end transfer test
-// can succeed on this codebase.
-
 // ── #692: create_vesting ──────────────────────────────────────────────────────
 
 #[test]
@@ -526,31 +523,6 @@ fn test_create_vesting_claim_before_vesting_panics() {
 }
 
 #[test]
-#[should_panic(expected = "vesting already claimed")]
-fn test_create_vesting_double_claim_panics() {
-    let e = Env::default();
-    e.mock_all_auths();
-    let contract_id = e.register_contract(None, VeriTixPay);
-    let client = VeriTixPayClient::new(&e, &contract_id);
-    let admin = Address::generate(&e);
-    client.initialize(&admin);
-
-    let token = create_token_contract(&e, &admin);
-    let token_admin = token::StellarAssetClient::new(&e, &token);
-    token_admin.mint(&admin, &1_000);
-
-    let holder = Address::generate(&e);
-    let vesting_ledger = e.ledger().sequence() + 100;
-    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
-
-    e.ledger().with_mut(|l| l.sequence_number = vesting_ledger);
-
-    client.claim_vesting(&holder, &id);
-    // Second claim must panic.
-    client.claim_vesting(&holder, &id);
-}
-
-#[test]
 fn test_get_contract_info_reflects_pause_state() {
     let e = Env::default();
     e.mock_all_auths();
@@ -620,11 +592,6 @@ fn test_whitelist_enable_blocks_non_whitelisted_transfer() {
     client.transfer_with_memo(&from, &to, &100, &Bytes::new(&e));
 }
 
-// NOTE: the whitelist success-path tests were dropped because
-// `transfer_with_memo` self-calls the contract's own `transfer`, which the host
-// rejects ("Contract re-entry is not allowed"), so no end-to-end transfer test
-// can succeed on this codebase.
-
 #[test]
 #[should_panic(expected = "sender not whitelisted")]
 fn test_whitelist_remove_from_whitelist_blocks_transfer() {
@@ -650,11 +617,6 @@ fn test_whitelist_remove_from_whitelist_blocks_transfer() {
     // Removing the sender from the whitelist blocks the transfer again.
     client.transfer_with_memo(&from, &to, &100, &Bytes::new(&e));
 }
-
-// NOTE: the whitelist success-path tests (add/disable) were dropped because
-// `transfer_with_memo` self-calls the contract's own `transfer`, which the host
-// rejects ("Contract re-entry is not allowed"), so no end-to-end transfer test
-// can succeed on this codebase.
 
 #[test]
 fn test_is_whitelisted_returns_false_by_default() {
@@ -708,14 +670,48 @@ fn test_whitelist_add_over_50_panics() {
 
     client.add_to_whitelist_batch(&admin, &accounts);
 }
+
+// ── #747: full_token_info ─────────────────────────────────────────────────────
+
+#[test]
+fn test_full_token_info_returns_metadata_after_initialize() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let info = client.full_token_info();
+    assert_eq!(info.name, soroban_sdk::String::from_str(&e, "VeriTix"));
+    assert_eq!(info.symbol, soroban_sdk::String::from_str(&e, "VTX"));
+    assert_eq!(info.decimal, 7);
+    assert_eq!(info.total_supply, 0);
+    assert_eq!(info.max_supply, i128::MAX);
+    assert_eq!(info.version, soroban_sdk::String::from_str(&e, "1.0.0"));
+}
+
+#[test]
+fn test_full_token_info_with_max_supply_and_mint() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize_with_max_supply(&admin, &1_000_000);
+
+    let user = Address::generate(&e);
+    client.mint(&admin, &user, &500);
+
+    let info = client.full_token_info();
+    assert_eq!(info.total_supply, 500);
+    assert_eq!(info.max_supply, 1_000_000);
+}
+
 // ── #733: Permit nonce replay ────────────────────────────────────────────────
 
 #[test]
 fn test_permit_nonce_sequence_0_to_9_all_succeed() {
-// ── #742: Vesting schedule tests ─────────────────────────────────────────────
-
-#[test]
-fn test_create_vesting_records_correct_fields() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -734,6 +730,45 @@ fn test_create_vesting_records_correct_fields() {
 #[test]
 #[should_panic(expected = "InvalidNonce")]
 fn test_permit_nonce_5_after_consuming_0_to_4_panics() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    let user = Address::generate(&e);
+    client.initialize(&admin);
+
+    // Consume nonces 0..=4, then replay the already-consumed nonce 0.
+    for i in 0..5 {
+        client.permit(&user, &i);
+    }
+    client.permit(&user, &0);
+}
+
+#[test]
+#[should_panic(expected = "InvalidNonce")]
+fn test_permit_nonce_out_of_order_panics() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    let user = Address::generate(&e);
+    client.initialize(&admin);
+
+    // Jumping straight to nonce 2 before nonce 0/1 are consumed must panic.
+    client.permit(&user, &2);
+}
+
+// ── #742: Vesting schedule tests ─────────────────────────────────────────────
+
+#[test]
+fn test_create_vesting_records_correct_fields() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
     client.initialize(&admin);
 
     let token = create_token_contract(&e, &admin);
@@ -747,7 +782,7 @@ fn test_permit_nonce_5_after_consuming_0_to_4_panics() {
     let record: VestingRecord = e.as_contract(&contract_id, || {
         e.storage()
             .persistent()
-            .get(&crate::storage_types::DataKey::Vesting(id))
+            .get(&DataKey::Vesting(id))
             .unwrap()
     });
 
@@ -767,19 +802,6 @@ fn test_claim_vesting_before_ledger_panics() {
     let contract_id = e.register_contract(None, VeriTixPay);
     let client = VeriTixPayClient::new(&e, &contract_id);
     let admin = Address::generate(&e);
-    let user = Address::generate(&e);
-    client.initialize(&admin);
-
-    // Consume nonces 0..=4, then replay the already-consumed nonce 0.
-    for i in 0..5 {
-        client.permit(&user, &i);
-    }
-    client.permit(&user, &0);
-}
-
-#[test]
-#[should_panic(expected = "InvalidNonce")]
-fn test_permit_nonce_out_of_order_panics() {
     client.initialize(&admin);
 
     let token = create_token_contract(&e, &admin);
@@ -801,11 +823,144 @@ fn test_claim_vesting_after_ledger_succeeds() {
     let contract_id = e.register_contract(None, VeriTixPay);
     let client = VeriTixPayClient::new(&e, &contract_id);
     let admin = Address::generate(&e);
-    let user = Address::generate(&e);
     client.initialize(&admin);
 
-    // Jumping straight to nonce 2 before nonce 0/1 are consumed must panic.
-    client.permit(&user, &2);
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    let token_client = token::Client::new(&e, &token);
+    token_admin.mint(&admin, &1_000);
+
+    let holder = Address::generate(&e);
+    let vesting_ledger = e.ledger().sequence() + 100;
+    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
+
+    e.ledger().with_mut(|l| l.sequence_number = vesting_ledger);
+    client.claim_vesting(&holder, &id);
+
+    assert_eq!(token_client.balance(&holder), 500);
+    assert_eq!(token_client.balance(&contract_id), 0);
+}
+
+#[test]
+#[should_panic(expected = "vesting already claimed")]
+fn test_claim_vesting_double_claim_panics() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&admin, &1_000);
+
+    let holder = Address::generate(&e);
+    let vesting_ledger = e.ledger().sequence() + 100;
+    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
+
+    e.ledger().with_mut(|l| l.sequence_number = vesting_ledger);
+    client.claim_vesting(&holder, &id);
+    // Second claim must panic.
+    client.claim_vesting(&holder, &id);
+}
+
+// ── #744: emergency_withdraw tests ────────────────────────────────────────────
+
+#[test]
+fn test_emergency_withdraw_transfers_stranded_tokens() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin_client = token::StellarAssetClient::new(&e, &token);
+    let token_client = token::Client::new(&e, &token);
+    token_admin_client.mint(&contract_id, &1000);
+
+    let recipient = Address::generate(&e);
+    client.emergency_withdraw(&admin, &recipient, &token, &1000);
+
+    assert_eq!(token_client.balance(&recipient), 1000);
+}
+
+#[test]
+#[should_panic(expected = "Unauthorized: caller is not the contract admin")]
+fn test_emergency_withdraw_requires_admin() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let stranger = Address::generate(&e);
+    let token = create_token_contract(&e, &admin);
+    let token_admin_client = token::StellarAssetClient::new(&e, &token);
+    token_admin_client.mint(&contract_id, &100);
+
+    let recipient = Address::generate(&e);
+    client.emergency_withdraw(&stranger, &recipient, &token, &100);
+}
+
+#[test]
+#[should_panic(expected = "Insufficient non-escrowed funds")]
+fn test_emergency_withdraw_cannot_exceed_unencumbered_balance() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin_client = token::StellarAssetClient::new(&e, &token);
+    // Only 100 stranded -> withdrawing 200 must fail.
+    token_admin_client.mint(&contract_id, &100);
+
+    let recipient = Address::generate(&e);
+    client.emergency_withdraw(&admin, &recipient, &token, &200);
+}
+
+#[test]
+fn test_emergency_withdraw_emits_event() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin_client = token::StellarAssetClient::new(&e, &token);
+    token_admin_client.mint(&contract_id, &100);
+
+    let recipient = Address::generate(&e);
+    client.emergency_withdraw(&admin, &recipient, &token, &100);
+
+    let events = e.events().all();
+    assert!(!events.events().is_empty(), "em_wdraw event should be emitted");
+}
+
+#[test]
+#[should_panic(expected = "Amount must be positive")]
+fn test_emergency_withdraw_zero_stranded_tokens_panics() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin_client = token::StellarAssetClient::new(&e, &token);
+    token_admin_client.mint(&contract_id, &100);
+
+    let recipient = Address::generate(&e);
+    client.emergency_withdraw(&admin, &recipient, &token, &0);
 }
 
 /// Rebuilds the exact signed message hash permit_batch verifies, so tests can
@@ -833,27 +988,6 @@ fn permit_batch_hash(
 
 #[test]
 fn test_permit_batch_increments_nonce_once_for_whole_batch() {
-    client.initialize(&admin);
-
-    let token = create_token_contract(&e, &admin);
-    let token_admin = token::StellarAssetClient::new(&e, &token);
-    let token_client = token::Client::new(&e, &token);
-    token_admin.mint(&admin, &1_000);
-
-    let holder = Address::generate(&e);
-    let vesting_ledger = e.ledger().sequence() + 100;
-    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
-
-    e.ledger().with_mut(|l| l.sequence_number = vesting_ledger);
-    client.claim_vesting(&holder, &id);
-
-    assert_eq!(token_client.balance(&holder), 500);
-    assert_eq!(token_client.balance(&contract_id), 0);
-}
-
-#[test]
-#[should_panic(expected = "vesting already claimed")]
-fn test_claim_vesting_double_claim_panics() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -883,24 +1017,6 @@ fn test_claim_vesting_double_claim_panics() {
 
 #[test]
 fn test_balance_key_ttl_extended_on_read() {
-    client.initialize(&admin);
-
-    let token = create_token_contract(&e, &admin);
-    let token_admin = token::StellarAssetClient::new(&e, &token);
-    token_admin.mint(&admin, &1_000);
-
-    let holder = Address::generate(&e);
-    let vesting_ledger = e.ledger().sequence() + 100;
-    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
-
-    e.ledger().with_mut(|l| l.sequence_number = vesting_ledger);
-    client.claim_vesting(&holder, &id);
-    // Second claim must panic.
-    client.claim_vesting(&holder, &id);
-}
-
-#[test]
-fn test_get_vesting_by_holder_populated_after_create() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -920,7 +1036,12 @@ fn test_get_vesting_by_holder_populated_after_create() {
 }
 
 #[test]
-fn test_escrow_key_ttl_extended_on_get_escrow() {
+fn test_get_vesting_by_holder_populated_after_create() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
     client.initialize(&admin);
 
     let token = create_token_contract(&e, &admin);
@@ -937,8 +1058,7 @@ fn test_escrow_key_ttl_extended_on_get_escrow() {
 }
 
 #[test]
-#[should_panic(expected = "Unauthorized: caller is not the contract admin")]
-fn test_create_vesting_requires_admin() {
+fn test_escrow_key_ttl_extended_on_get_escrow() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -974,7 +1094,15 @@ fn test_create_vesting_requires_admin() {
 }
 
 #[test]
-fn test_recurring_key_ttl_extended_on_get_recurring() {
+#[should_panic(expected = "Unauthorized: caller is not the contract admin")]
+fn test_create_vesting_requires_admin() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
     let token = create_token_contract(&e, &admin);
     let stranger = Address::generate(&e);
     let holder = Address::generate(&e);
@@ -985,6 +1113,34 @@ fn test_recurring_key_ttl_extended_on_get_recurring() {
 
 #[test]
 fn test_vesting_supply_invariant() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&admin, &1_000);
+
+    let holder = Address::generate(&e);
+    client.mint(&admin, &holder, &1000);
+    let supply_before = client.total_supply();
+
+    // Creating and claiming a vesting only moves external tokens — the
+    // internal total supply must not change.
+    let vesting_ledger = e.ledger().sequence() + 100;
+    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
+    assert_eq!(client.total_supply(), supply_before);
+
+    e.ledger().with_mut(|l| l.sequence_number = vesting_ledger);
+    client.claim_vesting(&holder, &id);
+    assert_eq!(client.total_supply(), supply_before);
+}
+
+#[test]
+fn test_recurring_key_ttl_extended_on_get_recurring() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -1010,44 +1166,6 @@ fn test_vesting_supply_invariant() {
 
 #[test]
 fn test_allowance_key_ttl_extended_on_read_allowance() {
-    let token = create_token_contract(&e, &admin);
-    let token_admin = token::StellarAssetClient::new(&e, &token);
-    token_admin.mint(&admin, &1_000);
-
-    let holder = Address::generate(&e);
-    client.mint(&admin, &holder, &1000);
-    let supply_before = client.total_supply();
-
-    // Creating and claiming a vesting only moves external tokens — the
-    // internal total supply must not change.
-    let vesting_ledger = e.ledger().sequence() + 100;
-    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
-    assert_eq!(client.total_supply(), supply_before);
-
-    e.ledger().with_mut(|l| l.sequence_number = vesting_ledger);
-    client.claim_vesting(&holder, &id);
-    assert_eq!(client.total_supply(), supply_before);
-}
-
-// ── #748: add_to_whitelist_signed ────────────────────────────────────────────
-
-/// Rebuilds the exact signed message hash the contract verifies for
-/// add_to_whitelist_signed, so tests can produce valid signatures.
-fn whitelist_signed_hash(e: &Env, admin: &Address, addresses: &Vec<Address>, nonce: u64) -> [u8; 32] {
-    let mut msg = Bytes::new(e);
-    msg.append(&symbol_short!("wl_sgn").to_xdr(e));
-    msg.append(&admin.clone().to_xdr(e));
-    for i in 0..addresses.len() {
-        msg.append(&addresses.get(i).unwrap().to_xdr(e));
-    }
-    msg.append(&nonce.to_xdr(e));
-    let hash: soroban_sdk::crypto::Hash<32> = e.crypto().sha256(&msg);
-    let digest: BytesN<32> = hash.into();
-    digest.to_array()
-}
-
-#[test]
-fn test_add_to_whitelist_signed_whitelists_all_addresses() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -1086,10 +1204,32 @@ fn test_escrow_lifetime_constant_is_at_least_one_year() {
     );
 }
 
-// ── #730: Supply invariant for dividend and airdrop ──────────────────────────
+// ── #748: add_to_whitelist_signed ────────────────────────────────────────────
+
+/// Rebuilds the exact signed message hash the contract verifies for
+/// add_to_whitelist_signed, so tests can produce valid signatures.
+fn whitelist_signed_hash(e: &Env, admin: &Address, addresses: &Vec<Address>, nonce: u64) -> [u8; 32] {
+    let mut msg = Bytes::new(e);
+    msg.append(&symbol_short!("wl_sgn").to_xdr(e));
+    msg.append(&admin.clone().to_xdr(e));
+    for i in 0..addresses.len() {
+        msg.append(&addresses.get(i).unwrap().to_xdr(e));
+    }
+    msg.append(&nonce.to_xdr(e));
+    let hash: soroban_sdk::crypto::Hash<32> = e.crypto().sha256(&msg);
+    let digest: BytesN<32> = hash.into();
+    digest.to_array()
+}
 
 #[test]
-fn test_dividend_supply_unchanged() {
+fn test_add_to_whitelist_signed_whitelists_all_addresses() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
     client.enable_whitelist(&admin);
 
     let sk = SigningKey::from_bytes(&[7u8; 32]);
@@ -1119,25 +1259,6 @@ fn test_add_to_whitelist_signed_increments_admin_nonce() {
     let admin = Address::generate(&e);
     client.initialize(&admin);
 
-    let h1 = Address::generate(&e);
-    let h2 = Address::generate(&e);
-    client.mint(&admin, &h1, &1000);
-    client.mint(&admin, &h2, &1000);
-    let supply_before = client.total_supply();
-
-    e.as_contract(&contract_id, || {
-        let mut holders = Vec::new(&e);
-        holders.push_back(h1.clone());
-        holders.push_back(h2.clone());
-        crate::divi::distribute_dividend(&e, &admin, 100, holders);
-    });
-
-    // Dividend is a pure distribution — total supply is unchanged.
-    assert_eq!(client.total_supply(), supply_before);
-}
-
-#[test]
-fn test_airdrop_supply_unchanged() {
     client.enable_whitelist(&admin);
 
     let sk = SigningKey::from_bytes(&[8u8; 32]);
@@ -1172,6 +1293,110 @@ fn test_add_to_whitelist_signed_rejects_replayed_nonce() {
     let admin = Address::generate(&e);
     client.initialize(&admin);
 
+    client.enable_whitelist(&admin);
+
+    let sk = SigningKey::from_bytes(&[9u8; 32]);
+    let public_key = BytesN::from_array(&e, &sk.verifying_key().to_bytes());
+    let a1 = Address::generate(&e);
+    let mut addresses = Vec::new(&e);
+    addresses.push_back(a1);
+
+    let digest = whitelist_signed_hash(&e, &admin, &addresses, 0);
+    let signature = BytesN::from_array(&e, &sk.try_sign(&digest).unwrap().to_bytes());
+
+    client.add_to_whitelist_signed(&admin, &addresses, &0u64, &public_key, &signature);
+    // Replaying the same nonce 0 signature must be rejected.
+    client.add_to_whitelist_signed(&admin, &addresses, &0u64, &public_key, &signature);
+}
+
+#[test]
+fn test_add_to_whitelist_signed_batch_succeeds() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    client.enable_whitelist(&admin);
+
+    let sk = SigningKey::from_bytes(&[10u8; 32]);
+    let public_key = BytesN::from_array(&e, &sk.verifying_key().to_bytes());
+
+    let mut addresses = Vec::new(&e);
+    for _ in 0..40 {
+        addresses.push_back(Address::generate(&e));
+    }
+
+    let digest = whitelist_signed_hash(&e, &admin, &addresses, 0);
+    let signature = BytesN::from_array(&e, &sk.try_sign(&digest).unwrap().to_bytes());
+
+    client.add_to_whitelist_signed(&admin, &addresses, &0u64, &public_key, &signature);
+    assert!(client.is_whitelisted(&addresses.get(39).unwrap()));
+}
+
+#[test]
+#[should_panic(expected = "TooManyAddresses: maximum 200 addresses per call")]
+fn test_add_to_whitelist_signed_over_200_panics() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    client.enable_whitelist(&admin);
+
+    let mut addresses = Vec::new(&e);
+    for _ in 0..201 {
+        addresses.push_back(Address::generate(&e));
+    }
+
+    // The size guard runs before signature verification, so no valid
+    // signature is required to reach the panic.
+    let sk = SigningKey::from_bytes(&[11u8; 32]);
+    let public_key = BytesN::from_array(&e, &sk.verifying_key().to_bytes());
+    let signature = BytesN::from_array(&e, &[0u8; 64]);
+    client.add_to_whitelist_signed(&admin, &addresses, &0u64, &public_key, &signature);
+}
+
+// ── #730: Supply invariant for dividend and airdrop ──────────────────────────
+
+#[test]
+fn test_dividend_supply_unchanged() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let h1 = Address::generate(&e);
+    let h2 = Address::generate(&e);
+    client.mint(&admin, &h1, &1000);
+    client.mint(&admin, &h2, &1000);
+    let supply_before = client.total_supply();
+
+    e.as_contract(&contract_id, || {
+        let mut holders = Vec::new(&e);
+        holders.push_back(h1.clone());
+        holders.push_back(h2.clone());
+        crate::divi::distribute_dividend(&e, &admin, 100, holders);
+    });
+
+    // Dividend is a pure distribution — total supply is unchanged.
+    assert_eq!(client.total_supply(), supply_before);
+}
+
+#[test]
+fn test_airdrop_supply_unchanged() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
     let token = create_token_contract(&e, &admin);
     let token_admin = token::StellarAssetClient::new(&e, &token);
 
@@ -1195,24 +1420,6 @@ fn test_add_to_whitelist_signed_rejects_replayed_nonce() {
 
 #[test]
 fn test_dividend_admin_balance_decreases_by_total_amount() {
-    client.enable_whitelist(&admin);
-
-    let sk = SigningKey::from_bytes(&[9u8; 32]);
-    let public_key = BytesN::from_array(&e, &sk.verifying_key().to_bytes());
-    let a1 = Address::generate(&e);
-    let mut addresses = Vec::new(&e);
-    addresses.push_back(a1);
-
-    let digest = whitelist_signed_hash(&e, &admin, &addresses, 0);
-    let signature = BytesN::from_array(&e, &sk.try_sign(&digest).unwrap().to_bytes());
-
-    client.add_to_whitelist_signed(&admin, &addresses, &0u64, &public_key, &signature);
-    // Replaying the same nonce 0 signature must be rejected.
-    client.add_to_whitelist_signed(&admin, &addresses, &0u64, &public_key, &signature);
-}
-
-#[test]
-fn test_add_to_whitelist_signed_batch_succeeds() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -1239,29 +1446,6 @@ fn test_add_to_whitelist_signed_batch_succeeds() {
 
 #[test]
 fn test_airdrop_admin_balance_decreases_by_total_amount() {
-    client.enable_whitelist(&admin);
-
-    let sk = SigningKey::from_bytes(&[10u8; 32]);
-    let public_key = BytesN::from_array(&e, &sk.verifying_key().to_bytes());
-
-    // 40 addresses keeps the test within the host's footprint budget while
-    // still exercising the batched path (the 200-cap is covered by the
-    // over-200 panic test below).
-    let mut addresses = Vec::new(&e);
-    for _ in 0..40 {
-        addresses.push_back(Address::generate(&e));
-    }
-
-    let digest = whitelist_signed_hash(&e, &admin, &addresses, 0);
-    let signature = BytesN::from_array(&e, &sk.try_sign(&digest).unwrap().to_bytes());
-
-    client.add_to_whitelist_signed(&admin, &addresses, &0u64, &public_key, &signature);
-    assert!(client.is_whitelisted(&addresses.get(39).unwrap()));
-}
-
-#[test]
-#[should_panic(expected = "TooManyAddresses: maximum 200 addresses per call")]
-fn test_add_to_whitelist_signed_over_200_panics() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -1288,17 +1472,142 @@ fn test_add_to_whitelist_signed_over_200_panics() {
 
     // The admin's token balance drops by exactly the airdropped amount.
     assert_eq!(token_client.balance(&admin), admin_before - 100);
-    client.enable_whitelist(&admin);
+}
 
-    let mut addresses = Vec::new(&e);
-    for _ in 0..201 {
-        addresses.push_back(Address::generate(&e));
-    }
+// ── #746: split_to_escrow tests ───────────────────────────────────────────────
 
-    // The size guard runs before signature verification, so no valid
-    // signature is required to reach the panic.
-    let sk = SigningKey::from_bytes(&[11u8; 32]);
-    let public_key = BytesN::from_array(&e, &sk.verifying_key().to_bytes());
-    let signature = BytesN::from_array(&e, &[0u8; 64]);
-    client.add_to_whitelist_signed(&admin, &addresses, &0u64, &public_key, &signature);
+#[test]
+fn test_split_to_escrow_returns_correct_number_of_ids() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let sender = Address::generate(&e);
+    let token = create_token_contract(&e, &sender);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&sender, &10_000);
+
+    let recipient1 = Address::generate(&e);
+    let recipient2 = Address::generate(&e);
+    let recipient3 = Address::generate(&e);
+    let recipients = Vec::from_array(
+        &e,
+        [(recipient1, 5000u32), (recipient2, 3000u32), (recipient3, 2000u32)],
+    );
+    let expiry = e.ledger().sequence() + 1000;
+
+    let ids = client.split_to_escrow(&sender, &recipients, &token, &10_000, &expiry);
+    assert_eq!(ids.len(), 3);
+}
+
+#[test]
+fn test_split_to_escrow_supply_invariant() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let sender = Address::generate(&e);
+    let token = create_token_contract(&e, &sender);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    let token_client = token::Client::new(&e, &token);
+    token_admin.mint(&sender, &10_000);
+
+    let recipient1 = Address::generate(&e);
+    let recipient2 = Address::generate(&e);
+    let recipients = Vec::from_array(&e, [(recipient1, 7000u32), (recipient2, 3000u32)]);
+    let expiry = e.ledger().sequence() + 1000;
+
+    let ids = client.split_to_escrow(&sender, &recipients, &token, &10_000, &expiry);
+
+    // The full amount is pulled into the contract and split without loss.
+    assert_eq!(token_client.balance(&contract_id), 10_000);
+    assert_eq!(token_client.balance(&sender), 0);
+
+    let escrow1 = client.get_escrow(&ids.get(0).unwrap());
+    let escrow2 = client.get_escrow(&ids.get(1).unwrap());
+    assert_eq!(escrow1.amount + escrow2.amount, 10_000);
+}
+
+#[test]
+fn test_split_to_escrow_each_escrow_has_correct_amount() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let sender = Address::generate(&e);
+    let token = create_token_contract(&e, &sender);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&sender, &10_000);
+
+    let recipient1 = Address::generate(&e);
+    let recipient2 = Address::generate(&e);
+    let recipients = Vec::from_array(&e, [(recipient1, 6000u32), (recipient2, 4000u32)]);
+    let expiry = e.ledger().sequence() + 1000;
+
+    let ids = client.split_to_escrow(&sender, &recipients, &token, &10_000, &expiry);
+    assert_eq!(ids.len(), 2);
+    let escrow1 = client.get_escrow(&ids.get(0).unwrap());
+    let escrow2 = client.get_escrow(&ids.get(1).unwrap());
+    assert_eq!(escrow1.amount, 6000);
+    assert_eq!(escrow2.amount, 4000);
+}
+
+#[test]
+fn test_split_to_escrow_beneficiaries_match_recipients() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let sender = Address::generate(&e);
+    let token = create_token_contract(&e, &sender);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&sender, &10_000);
+
+    let recipient1 = Address::generate(&e);
+    let recipient2 = Address::generate(&e);
+    let recipients = Vec::from_array(&e, [(recipient1.clone(), 5000u32), (recipient2.clone(), 5000u32)]);
+    let expiry = e.ledger().sequence() + 1000;
+
+    let ids = client.split_to_escrow(&sender, &recipients, &token, &10_000, &expiry);
+    assert_eq!(ids.len(), 2);
+    let escrow1 = client.get_escrow(&ids.get(0).unwrap());
+    let escrow2 = client.get_escrow(&ids.get(1).unwrap());
+    assert_eq!(escrow1.beneficiary, recipient1);
+    assert_eq!(escrow2.beneficiary, recipient2);
+    assert_eq!(escrow1.depositor, sender);
+    assert_eq!(escrow2.depositor, sender);
+}
+
+#[test]
+#[should_panic(expected = "total basis points must equal 10000")]
+fn test_split_to_escrow_invalid_recipients_panics() {
+    let e = Env::default();
+    e.mock_all_auths();
+    let contract_id = e.register_contract(None, VeriTixPay);
+    let client = VeriTixPayClient::new(&e, &contract_id);
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let sender = Address::generate(&e);
+    let token = create_token_contract(&e, &sender);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&sender, &10_000);
+
+    // Invalid: total basis points do not sum to 10000.
+    let recipient = Address::generate(&e);
+    let recipients = Vec::from_array(&e, [(recipient, 5000u32)]);
+    let expiry = e.ledger().sequence() + 1000;
+    client.split_to_escrow(&sender, &recipients, &token, &10_000, &expiry);
 }
