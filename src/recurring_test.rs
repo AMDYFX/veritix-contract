@@ -1,6 +1,10 @@
 #![cfg(test)]
 
-use crate::recurring::{get_recurring_history, record_recurring_execution};
+use crate::contract::VeritixContract;
+use crate::recurring::{
+    get_recurring_history, index_recurring_for_payee, record_execution,
+    record_recurring_execution, remove_recurring_for_payee,
+};
 use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Address, Env};
 
 #[test]

@@ -1,5 +1,6 @@
 use crate::storage_types::{
-    ContractInfo, DataKey, RecurringExecution, RecurringPayment, ResolverStats, VestingRecord,
+    ContractInfo, DataKey, DisputeStats, EscrowDepositorStats, FullTokenInfo, RecurringExecution,
+    RecurringPayment, ResolverStats, VestingRecord,
 };
 use crate::validation::require_positive_amount;
 use crate::{
@@ -705,6 +706,9 @@ pub trait VeriTixPayTrait {
     /// - `e` — contract environment (auto-injected).
     /// - `resolver` — the arbiter/resolver to query.
     fn resolver_stats(e: Env, resolver: Address) -> ResolverStats;
+    fn dispute_stats(e: Env) -> DisputeStats;
+    fn full_token_info(e: Env) -> FullTokenInfo;
+    fn escrow_stats_for_depositor(e: Env, depositor: Address) -> EscrowDepositorStats;
 
     // ── #454: Protocol fee stats ─────────────────────────────────────────────
     /// Returns protocol fee configuration: fee basis points, treasury address,
@@ -1987,6 +1991,28 @@ impl VeriTixPayTrait for VeriTixPay {
         ContractInfo { version, admin, is_paused, initialized_at_ledger }
     }
 
+    fn dispute_stats(e: Env) -> DisputeStats {
+        crate::dispute::get_dispute_stats(&e)
+    }
+
+    fn full_token_info(e: Env) -> FullTokenInfo {
+        let version: soroban_sdk::String =
+            e.storage().persistent().get(&DataKey::Version).unwrap_or(String::from_str(&e, "1.0.0"));
+        let max_supply: i128 = e.storage().persistent().get(&DataKey::MaxSupply).unwrap_or(i128::MAX);
+        FullTokenInfo {
+            name: soroban_sdk::String::from_str(&e, "VeriTix"),
+            symbol: soroban_sdk::String::from_str(&e, "VTX"),
+            decimal: 7,
+            total_supply: balance::read_supply(&e),
+            max_supply,
+            version,
+        }
+    }
+
+    fn escrow_stats_for_depositor(e: Env, depositor: Address) -> EscrowDepositorStats {
+        crate::escrow::escrow_stats_for_depositor(&e, &depositor)
+    }
+
     fn contract_summary(e: Env) -> ContractSummary {
         let admin: Address = e
             .storage()
@@ -2338,6 +2364,9 @@ impl VeriTixPayTrait for VeriTixPay {
     }
 }
 
+// #773: Auxiliary contract exposing recurring history/payee views and split fee
+// configuration. The four separate contract blocks merged in #773 are
+// consolidated here so the crate compiles.
 // NOTE: this extension contract (added by earlier merged PRs) is merged into a
 // single definition here because duplicate `VeritixContract` struct/impl blocks
 // from those merges broke compilation (E0428 duplicate definitions).

@@ -521,9 +521,7 @@ mod tests {
 #[cfg(test)]
 mod splitter_fee_tests {
     use crate::contract::VeritixContract;
-    use soroban_sdk::{
-        testutils::Address as _, Address, Env,
-    };
+    use soroban_sdk::{testutils::Address as _, Address, Env};
 
     #[test]
     fn test_split_protocol_fee_configuration_and_calculation() {

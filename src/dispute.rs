@@ -1,5 +1,6 @@
 use crate::escrow::load_record;
 use crate::storage_types::DataKey;
+use crate::storage_types::DisputeStats;
 use crate::storage_types::ResolverStats;
 use soroban_sdk::{token, Address, Env, Vec};
 
@@ -13,6 +14,28 @@ pub fn get_arbiter(e: &Env) -> Address {
         .persistent()
         .get(&DataKey::Arbiter)
         .expect("arbiter not set")
+}
+
+// ── #750: Global dispute statistics counters ───────────────────────────────────
+
+fn read_dispute_stats(e: &Env) -> DisputeStats {
+    e.storage().persistent().get(&DataKey::DisputeStats).unwrap_or(DisputeStats {
+        open: 0,
+        resolved_for_beneficiary: 0,
+        resolved_for_depositor: 0,
+        expired: 0,
+    })
+}
+
+fn bump_dispute_stats(e: &Env, f: impl FnOnce(&mut DisputeStats)) {
+    let mut stats = read_dispute_stats(e);
+    f(&mut stats);
+    e.storage().persistent().set(&DataKey::DisputeStats, &stats);
+}
+
+/// Return aggregate dispute statistics across all escrows.
+pub fn get_dispute_stats(e: &Env) -> DisputeStats {
+    read_dispute_stats(e)
 }
 
 pub fn open_dispute(e: Env, claimant: Address, escrow_id: u32, dispute_id: u32) {
@@ -54,6 +77,8 @@ pub fn raise_dispute(e: &Env, caller: &Address, escrow_id: u32) {
     e.storage()
         .persistent()
         .set(&DataKey::ClaimantDisputes(caller.clone()), &disputes);
+
+    bump_dispute_stats(e, |s| s.open += 1);
 
     e.events().publish(
         (soroban_sdk::symbol_short!("dispute"),),
@@ -147,6 +172,18 @@ pub fn resolve_dispute(e: &Env, resolver: &Address, escrow_id: u32, winner: &Add
     e.storage()
         .persistent()
         .remove(&DataKey::EscrowDispute(escrow_id));
+
+    if is_for_beneficiary {
+        bump_dispute_stats(e, |s| {
+            s.open = s.open.saturating_sub(1);
+            s.resolved_for_beneficiary += 1;
+        });
+    } else {
+        bump_dispute_stats(e, |s| {
+            s.open = s.open.saturating_sub(1);
+            s.resolved_for_depositor += 1;
+        });
+    }
 
     update_resolver_stats(e, resolver, is_for_beneficiary);
 
@@ -375,6 +412,11 @@ pub fn expire_dispute(e: &Env, caller: &Address, escrow_id: u32) {
     e.storage()
         .persistent()
         .remove(&DataKey::DisputeOpenedAt(escrow_id));
+
+    bump_dispute_stats(e, |s| {
+        s.open = s.open.saturating_sub(1);
+        s.expired += 1;
+    });
 
     e.events().publish(
         (

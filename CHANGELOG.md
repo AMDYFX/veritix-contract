@@ -16,6 +16,10 @@ for contract upgrades.
 
 ### Added
 
+- `dispute_stats` view returning global dispute counters (open, resolved, expired) (#750).
+- `full_token_info` view returning name, symbol, decimal, total_supply, max_supply, and version (#747).
+- `escrow_stats_for_depositor` view counting active, released, and refunded escrows per depositor (#740).
+- Tests for `emergency_withdraw` escrow-funds protection (#744).
 - `contract_paused_for` view returning how many ledgers the contract has been paused (#739).
 - `get_all_escrows_between` view returning all escrow IDs (active and settled) between a depositor and beneficiary (#738).
 - Tests for `split_to_escrow` (#746) and `cancel_recurring_batch` (#737).
