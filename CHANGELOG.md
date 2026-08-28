@@ -25,6 +25,15 @@ for contract upgrades.
   both parties authenticated; the payer index is updated.
 - Test coverage for recurring payer transfer, permit nonce replay protection,
   storage TTL lifetimes, and dividend/airdrop supply invariants.
+- Recurring execution window (`set_recurring_execution_window`) — recurring
+  executions past `last_charged + interval + window` panic with
+  `ExecutionWindowExpired` so keepers cannot run stale payments.
+- `add_to_whitelist_signed` — bulk whitelist (max 200 addresses) via a single
+  signed message with admin-nonce replay protection.
+- `freeze_until` — freeze an account until a specific ledger; the freeze
+  auto-clears once the current ledger passes the expiry ledger.
+- Test coverage for `freeze_until`, vesting schedules, the recurring execution
+  window, and the signed bulk whitelist.
 - `add_to_whitelist_batch` — whitelist up to 50 accounts in a single admin call.
 - Cap `set_protocol_fee` at 500 bps (5%) to keep the protocol fee bounded.
 - Events for `setup_recurring`, `execute_recurring`, and `cancel_recurring`

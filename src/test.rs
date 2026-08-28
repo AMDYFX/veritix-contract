@@ -2,6 +2,7 @@ use crate::contract::{VeriTixPay, VeriTixPayClient};
 use crate::storage_types::{
     MIN_ESCROW_AMOUNT, BALANCE_LIFETIME_THRESHOLD, ESCROW_LIFETIME_THRESHOLD,
 };
+use crate::storage_types::{MIN_ESCROW_AMOUNT, VestingRecord};
 use ed25519_dalek::{Signer, SigningKey};
 use soroban_sdk::{
     symbol_short,
@@ -711,6 +712,10 @@ fn test_whitelist_add_over_50_panics() {
 
 #[test]
 fn test_permit_nonce_sequence_0_to_9_all_succeed() {
+// ── #742: Vesting schedule tests ─────────────────────────────────────────────
+
+#[test]
+fn test_create_vesting_records_correct_fields() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -729,6 +734,34 @@ fn test_permit_nonce_sequence_0_to_9_all_succeed() {
 #[test]
 #[should_panic(expected = "InvalidNonce")]
 fn test_permit_nonce_5_after_consuming_0_to_4_panics() {
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&admin, &1_000);
+
+    let holder = Address::generate(&e);
+    let vesting_ledger = e.ledger().sequence() + 100;
+
+    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
+    let record: VestingRecord = e.as_contract(&contract_id, || {
+        e.storage()
+            .persistent()
+            .get(&crate::storage_types::DataKey::Vesting(id))
+            .unwrap()
+    });
+
+    assert_eq!(record.id, id);
+    assert_eq!(record.holder, holder);
+    assert_eq!(record.token, token);
+    assert_eq!(record.amount, 500);
+    assert_eq!(record.vesting_ledger, vesting_ledger);
+    assert!(!record.claimed);
+}
+
+#[test]
+#[should_panic(expected = "vesting period not yet reached")]
+fn test_claim_vesting_before_ledger_panics() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -747,6 +780,22 @@ fn test_permit_nonce_5_after_consuming_0_to_4_panics() {
 #[test]
 #[should_panic(expected = "InvalidNonce")]
 fn test_permit_nonce_out_of_order_panics() {
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&admin, &1_000);
+
+    let holder = Address::generate(&e);
+    let vesting_ledger = e.ledger().sequence() + 100;
+    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
+
+    // Claiming before the vesting ledger panics.
+    client.claim_vesting(&holder, &id);
+}
+
+#[test]
+fn test_claim_vesting_after_ledger_succeeds() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -784,6 +833,27 @@ fn permit_batch_hash(
 
 #[test]
 fn test_permit_batch_increments_nonce_once_for_whole_batch() {
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    let token_client = token::Client::new(&e, &token);
+    token_admin.mint(&admin, &1_000);
+
+    let holder = Address::generate(&e);
+    let vesting_ledger = e.ledger().sequence() + 100;
+    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
+
+    e.ledger().with_mut(|l| l.sequence_number = vesting_ledger);
+    client.claim_vesting(&holder, &id);
+
+    assert_eq!(token_client.balance(&holder), 500);
+    assert_eq!(token_client.balance(&contract_id), 0);
+}
+
+#[test]
+#[should_panic(expected = "vesting already claimed")]
+fn test_claim_vesting_double_claim_panics() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -813,6 +883,24 @@ fn test_permit_batch_increments_nonce_once_for_whole_batch() {
 
 #[test]
 fn test_balance_key_ttl_extended_on_read() {
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&admin, &1_000);
+
+    let holder = Address::generate(&e);
+    let vesting_ledger = e.ledger().sequence() + 100;
+    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
+
+    e.ledger().with_mut(|l| l.sequence_number = vesting_ledger);
+    client.claim_vesting(&holder, &id);
+    // Second claim must panic.
+    client.claim_vesting(&holder, &id);
+}
+
+#[test]
+fn test_get_vesting_by_holder_populated_after_create() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -833,6 +921,24 @@ fn test_balance_key_ttl_extended_on_read() {
 
 #[test]
 fn test_escrow_key_ttl_extended_on_get_escrow() {
+    client.initialize(&admin);
+
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&admin, &1_000);
+
+    let holder = Address::generate(&e);
+    let vesting_ledger = e.ledger().sequence() + 100;
+
+    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
+    let vestings = client.get_vesting_by_holder(&holder);
+    assert_eq!(vestings.len(), 1);
+    assert_eq!(vestings.get(0).unwrap(), id);
+}
+
+#[test]
+#[should_panic(expected = "Unauthorized: caller is not the contract admin")]
+fn test_create_vesting_requires_admin() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -869,6 +975,16 @@ fn test_escrow_key_ttl_extended_on_get_escrow() {
 
 #[test]
 fn test_recurring_key_ttl_extended_on_get_recurring() {
+    let token = create_token_contract(&e, &admin);
+    let stranger = Address::generate(&e);
+    let holder = Address::generate(&e);
+    let vesting_ledger = e.ledger().sequence() + 100;
+
+    client.create_vesting(&stranger, &holder, &token, &500, &vesting_ledger);
+}
+
+#[test]
+fn test_vesting_supply_invariant() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -894,6 +1010,44 @@ fn test_recurring_key_ttl_extended_on_get_recurring() {
 
 #[test]
 fn test_allowance_key_ttl_extended_on_read_allowance() {
+    let token = create_token_contract(&e, &admin);
+    let token_admin = token::StellarAssetClient::new(&e, &token);
+    token_admin.mint(&admin, &1_000);
+
+    let holder = Address::generate(&e);
+    client.mint(&admin, &holder, &1000);
+    let supply_before = client.total_supply();
+
+    // Creating and claiming a vesting only moves external tokens — the
+    // internal total supply must not change.
+    let vesting_ledger = e.ledger().sequence() + 100;
+    let id = client.create_vesting(&admin, &holder, &token, &500, &vesting_ledger);
+    assert_eq!(client.total_supply(), supply_before);
+
+    e.ledger().with_mut(|l| l.sequence_number = vesting_ledger);
+    client.claim_vesting(&holder, &id);
+    assert_eq!(client.total_supply(), supply_before);
+}
+
+// ── #748: add_to_whitelist_signed ────────────────────────────────────────────
+
+/// Rebuilds the exact signed message hash the contract verifies for
+/// add_to_whitelist_signed, so tests can produce valid signatures.
+fn whitelist_signed_hash(e: &Env, admin: &Address, addresses: &Vec<Address>, nonce: u64) -> [u8; 32] {
+    let mut msg = Bytes::new(e);
+    msg.append(&symbol_short!("wl_sgn").to_xdr(e));
+    msg.append(&admin.clone().to_xdr(e));
+    for i in 0..addresses.len() {
+        msg.append(&addresses.get(i).unwrap().to_xdr(e));
+    }
+    msg.append(&nonce.to_xdr(e));
+    let hash: soroban_sdk::crypto::Hash<32> = e.crypto().sha256(&msg);
+    let digest: BytesN<32> = hash.into();
+    digest.to_array()
+}
+
+#[test]
+fn test_add_to_whitelist_signed_whitelists_all_addresses() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -936,6 +1090,28 @@ fn test_escrow_lifetime_constant_is_at_least_one_year() {
 
 #[test]
 fn test_dividend_supply_unchanged() {
+    client.enable_whitelist(&admin);
+
+    let sk = SigningKey::from_bytes(&[7u8; 32]);
+    let public_key = BytesN::from_array(&e, &sk.verifying_key().to_bytes());
+
+    let a1 = Address::generate(&e);
+    let a2 = Address::generate(&e);
+    let mut addresses = Vec::new(&e);
+    addresses.push_back(a1.clone());
+    addresses.push_back(a2.clone());
+
+    let digest = whitelist_signed_hash(&e, &admin, &addresses, 0);
+    let signature = BytesN::from_array(&e, &sk.try_sign(&digest).unwrap().to_bytes());
+
+    client.add_to_whitelist_signed(&admin, &addresses, &0u64, &public_key, &signature);
+
+    assert!(client.is_whitelisted(&a1));
+    assert!(client.is_whitelisted(&a2));
+}
+
+#[test]
+fn test_add_to_whitelist_signed_increments_admin_nonce() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -962,6 +1138,33 @@ fn test_dividend_supply_unchanged() {
 
 #[test]
 fn test_airdrop_supply_unchanged() {
+    client.enable_whitelist(&admin);
+
+    let sk = SigningKey::from_bytes(&[8u8; 32]);
+    let public_key = BytesN::from_array(&e, &sk.verifying_key().to_bytes());
+    let a1 = Address::generate(&e);
+    let a2 = Address::generate(&e);
+    let mut addresses = Vec::new(&e);
+    addresses.push_back(a1.clone());
+    addresses.push_back(a2.clone());
+
+    // Nonce 0 succeeds and increments the admin nonce to 1...
+    let digest0 = whitelist_signed_hash(&e, &admin, &addresses, 0);
+    let sig0 = BytesN::from_array(&e, &sk.try_sign(&digest0).unwrap().to_bytes());
+    client.add_to_whitelist_signed(&admin, &addresses, &0u64, &public_key, &sig0);
+
+    // ...so nonce 1 is the only valid next call.
+    let digest1 = whitelist_signed_hash(&e, &admin, &addresses, 1);
+    let sig1 = BytesN::from_array(&e, &sk.try_sign(&digest1).unwrap().to_bytes());
+    client.add_to_whitelist_signed(&admin, &addresses, &1u64, &public_key, &sig1);
+
+    assert!(client.is_whitelisted(&a1));
+    assert!(client.is_whitelisted(&a2));
+}
+
+#[test]
+#[should_panic(expected = "InvalidNonce")]
+fn test_add_to_whitelist_signed_rejects_replayed_nonce() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -992,6 +1195,24 @@ fn test_airdrop_supply_unchanged() {
 
 #[test]
 fn test_dividend_admin_balance_decreases_by_total_amount() {
+    client.enable_whitelist(&admin);
+
+    let sk = SigningKey::from_bytes(&[9u8; 32]);
+    let public_key = BytesN::from_array(&e, &sk.verifying_key().to_bytes());
+    let a1 = Address::generate(&e);
+    let mut addresses = Vec::new(&e);
+    addresses.push_back(a1);
+
+    let digest = whitelist_signed_hash(&e, &admin, &addresses, 0);
+    let signature = BytesN::from_array(&e, &sk.try_sign(&digest).unwrap().to_bytes());
+
+    client.add_to_whitelist_signed(&admin, &addresses, &0u64, &public_key, &signature);
+    // Replaying the same nonce 0 signature must be rejected.
+    client.add_to_whitelist_signed(&admin, &addresses, &0u64, &public_key, &signature);
+}
+
+#[test]
+fn test_add_to_whitelist_signed_batch_succeeds() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -1018,6 +1239,29 @@ fn test_dividend_admin_balance_decreases_by_total_amount() {
 
 #[test]
 fn test_airdrop_admin_balance_decreases_by_total_amount() {
+    client.enable_whitelist(&admin);
+
+    let sk = SigningKey::from_bytes(&[10u8; 32]);
+    let public_key = BytesN::from_array(&e, &sk.verifying_key().to_bytes());
+
+    // 40 addresses keeps the test within the host's footprint budget while
+    // still exercising the batched path (the 200-cap is covered by the
+    // over-200 panic test below).
+    let mut addresses = Vec::new(&e);
+    for _ in 0..40 {
+        addresses.push_back(Address::generate(&e));
+    }
+
+    let digest = whitelist_signed_hash(&e, &admin, &addresses, 0);
+    let signature = BytesN::from_array(&e, &sk.try_sign(&digest).unwrap().to_bytes());
+
+    client.add_to_whitelist_signed(&admin, &addresses, &0u64, &public_key, &signature);
+    assert!(client.is_whitelisted(&addresses.get(39).unwrap()));
+}
+
+#[test]
+#[should_panic(expected = "TooManyAddresses: maximum 200 addresses per call")]
+fn test_add_to_whitelist_signed_over_200_panics() {
     let e = Env::default();
     e.mock_all_auths();
     let contract_id = e.register_contract(None, VeriTixPay);
@@ -1044,4 +1288,17 @@ fn test_airdrop_admin_balance_decreases_by_total_amount() {
 
     // The admin's token balance drops by exactly the airdropped amount.
     assert_eq!(token_client.balance(&admin), admin_before - 100);
+    client.enable_whitelist(&admin);
+
+    let mut addresses = Vec::new(&e);
+    for _ in 0..201 {
+        addresses.push_back(Address::generate(&e));
+    }
+
+    // The size guard runs before signature verification, so no valid
+    // signature is required to reach the panic.
+    let sk = SigningKey::from_bytes(&[11u8; 32]);
+    let public_key = BytesN::from_array(&e, &sk.verifying_key().to_bytes());
+    let signature = BytesN::from_array(&e, &[0u8; 64]);
+    client.add_to_whitelist_signed(&admin, &addresses, &0u64, &public_key, &signature);
 }

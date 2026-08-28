@@ -501,11 +501,19 @@ fn transfer_setup(
     u32,
     Address,
 ) {
+// ── #749: recurring execution window ─────────────────────────────────────────
+
+#[test]
+fn test_execute_recurring_within_execution_window_succeeds() {
+    use soroban_sdk::{testutils::Address as _, Address};
     let e = Env::default();
     e.mock_all_auths();
 
     let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
     let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
 
     let payer = Address::generate(&e);
     let payee = Address::generate(&e);
@@ -586,4 +594,80 @@ fn test_transfer_recurring_payer_inactive_recurring_panics() {
 
     client.cancel_recurring(&payer, &id);
     client.transfer_recurring_payer(&payer, &id, &new_payer);
+
+    // Configure a 1000-ledger execution window.
+    client.set_recurring_execution_window(&admin, &1000);
+
+    // Execute 10 ledgers late — still inside the window, so it succeeds.
+    e.ledger().with_mut(|l| l.sequence_number += 110);
+    client.execute_recurring(&id);
+    assert!(client.is_recurring_active(&id));
+}
+
+#[test]
+#[should_panic(expected = "ExecutionWindowExpired: payment opportunity has passed")]
+fn test_execute_recurring_past_execution_window_panics() {
+    use soroban_sdk::{testutils::Address as _, Address};
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let payer = Address::generate(&e);
+    let payee = Address::generate(&e);
+    let token = e.register_stellar_asset_contract(Address::generate(&e));
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &1000);
+
+    let id = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+
+    // A 100-ledger window: executions after due (100) + window (100) are refused.
+    client.set_recurring_execution_window(&admin, &100);
+    e.ledger().with_mut(|l| l.sequence_number += 201);
+    client.execute_recurring(&id);
+}
+
+#[test]
+#[should_panic(expected = "Unauthorized")]
+fn test_set_recurring_execution_window_requires_admin() {
+    use soroban_sdk::{testutils::Address as _, Address};
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let stranger = Address::generate(&e);
+    client.set_recurring_execution_window(&stranger, &1000);
+}
+
+#[test]
+fn test_execute_recurring_without_window_allows_late_execution() {
+    use soroban_sdk::{testutils::Address as _, Address};
+    let e = Env::default();
+    e.mock_all_auths();
+
+    let contract_id = e.register_contract(None, crate::contract::VeriTixPay);
+    let client = crate::contract::VeriTixPayClient::new(&e, &contract_id);
+
+    let admin = Address::generate(&e);
+    client.initialize(&admin);
+
+    let payer = Address::generate(&e);
+    let payee = Address::generate(&e);
+    let token = e.register_stellar_asset_contract(Address::generate(&e));
+    soroban_sdk::token::StellarAssetClient::new(&e, &token).mint(&payer, &1000);
+
+    let id = client.setup_recurring(&payer, &payee, &token, &100, &100, &5);
+
+    // No window configured — executing late is still allowed.
+    e.ledger().with_mut(|l| l.sequence_number += 110);
+    client.execute_recurring(&id);
+    assert!(client.is_recurring_active(&id));
 }

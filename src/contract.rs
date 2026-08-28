@@ -239,6 +239,19 @@ pub trait VeriTixPayTrait {
     fn resume_recurring(e: Env, caller: Address, recurring_id: u32);
     // #735: transfer a recurring payment to a new payer
     fn transfer_recurring_payer(e: Env, caller: Address, recurring_id: u32, new_payer: Address);
+    // #749: recurring execution window
+    fn set_recurring_execution_window(e: Env, admin: Address, window_ledgers: u32);
+    // #743: timed freeze
+    fn freeze_until(e: Env, admin: Address, account: Address, until_ledger: u32);
+    // #748: signed bulk whitelist
+    fn add_to_whitelist_signed(
+        e: Env,
+        admin: Address,
+        addresses: Vec<Address>,
+        nonce: u64,
+        public_key: BytesN<32>,
+        signature: BytesN<64>,
+    );
     // #741: batch whitelist add (max 50 accounts)
     fn add_to_whitelist_batch(e: Env, admin: Address, accounts: Vec<Address>);
 }
@@ -1208,6 +1221,23 @@ impl VeriTixPayTrait for VeriTixPay {
 
     fn transfer_recurring_payer(e: Env, caller: Address, recurring_id: u32, new_payer: Address) {
         recurring::transfer_recurring_payer(&e, &caller, recurring_id, new_payer)
+    fn set_recurring_execution_window(e: Env, admin: Address, window_ledgers: u32) {
+        recurring::set_recurring_execution_window(&e, &admin, window_ledgers)
+    }
+
+    fn freeze_until(e: Env, admin: Address, account: Address, until_ledger: u32) {
+        crate::freeze::freeze_until(&e, &admin, &account, until_ledger)
+    }
+
+    fn add_to_whitelist_signed(
+        e: Env,
+        admin: Address,
+        addresses: Vec<Address>,
+        nonce: u64,
+        public_key: BytesN<32>,
+        signature: BytesN<64>,
+    ) {
+        whitelist::add_to_whitelist_signed(&e, &admin, &addresses, nonce, &public_key, &signature)
     }
 
     fn add_to_whitelist_batch(e: Env, admin: Address, accounts: Vec<Address>) {

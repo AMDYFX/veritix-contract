@@ -36,10 +36,14 @@ pub enum DataKey {
     LastEscrowTime(Address),
     Allowance(Address, Address),
     Frozen(Address),
+    // #743: timed freeze — auto-clears once the ledger passes until_ledger
+    FrozenUntil(Address),
     EscrowDispute(u32),
     TotalSupply,
     RecurringCount,
     Recurring(u32),
+    // #749: global execution window (in ledgers) for recurring payments
+    RecurringExecutionWindow,
     Arbiter,
     ResolverStats(Address),
     FeeBps,
@@ -70,6 +74,8 @@ pub enum DataKey {
     MaxSupply,
     Paused,
     Nonce(Address),
+    // #748: admin nonce tracking for signed bulk whitelist calls
+    AdminNonce(Address),
     PayerRecurrings(Address),
     ClawbackCosigner,
     Snapshot(Address),
