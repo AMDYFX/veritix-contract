@@ -57,7 +57,7 @@ pub fn spendable_balance(e: &Env, account: &Address) -> i128 {
 /// [`credit`] and [`debit`] — so every path that moves tokens (transfer, mint,
 /// burn, clawback, dispute settlement) keeps it in step without having to
 /// remember to.
-fn holders(e: &Env) -> Vec<Address> {
+pub(crate) fn holders(e: &Env) -> Vec<Address> {
     e.storage()
         .persistent()
         .get(&DataKey::Holders)
@@ -122,31 +122,6 @@ pub fn holders_page(e: &Env, offset: u32, limit: u32) -> Vec<Address> {
         i += 1;
     }
     out
-}
-
-/// Credits `amount` to `account` without touching total supply.
-///
-pub fn holders(e: &Env) -> soroban_sdk::Vec<Address> {
-    e.storage()
-        .persistent()
-        .get(&DataKey::HolderSet)
-        .unwrap_or_else(|| soroban_sdk::Vec::new(e))
-}
-
-fn add_holder(e: &Env, account: &Address) {
-    let mut set = holders(e);
-    if !set.contains(account.clone()) {
-        set.push_back(account.clone());
-        e.storage().persistent().set(&DataKey::HolderSet, &set);
-    }
-}
-
-fn remove_holder(e: &Env, account: &Address) {
-    let mut set = holders(e);
-    if let Some(index) = set.first_index_of(account.clone()) {
-        set.remove(index);
-        e.storage().persistent().set(&DataKey::HolderSet, &set);
-    }
 }
 
 /// Credits `amount` to `account` without touching total supply.
@@ -261,25 +236,6 @@ pub fn mint(e: &Env, to: &Address, amount: i128) {
         amount,
     }
     .publish(e);
-}
-
-/// Removes `amount` from total supply.
-///
-/// The mirror of [`increase_supply`]: supply only ever shrinks through burns
-/// and clawbacks, so the counter and the sum of balances cannot drift apart.
-/// The cap is not re-checked — shrinking supply can never violate it.
-///
-/// # Panics
-///
-/// Panics with `SupplyUnderflow` when `amount` exceeds the current supply,
-/// which would mean removing tokens that were never minted.
-pub fn decrease_supply(e: &Env, amount: i128) {
-    let new_supply = total_supply(e)
-        .checked_sub(amount)
-        .unwrap_or_else(|| panic!("SupplyUnderflow: {} would drive supply below zero", amount));
-    e.storage()
-        .persistent()
-        .set(&DataKey::TotalSupply, &new_supply);
 }
 
 /// Recovers `amount` of `from`'s tokens for the admin, taking them out of

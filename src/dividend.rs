@@ -11,9 +11,10 @@ pub fn take_snapshot(e: &Env, admin: &Address, snapshot_id: u32, holders: Vec<Ad
     let mut total: i128 = 0;
     for holder in holders.iter() {
         let bal = balance::balance_of(e, &holder);
-        e.storage()
-            .persistent()
-            .set(&DataKey::Snapshot(snapshot_id, holder.clone()), &bal);
+        e.storage().persistent().set(
+            &DataKey::Snapshot(snapshot_id as u64, holder.clone()),
+            &bal,
+        );
         total = total
             .checked_add(bal)
             .unwrap_or_else(|| panic!("SnapshotOverflow: balances overflow i128"));
@@ -21,14 +22,14 @@ pub fn take_snapshot(e: &Env, admin: &Address, snapshot_id: u32, holders: Vec<Ad
 
     e.storage()
         .persistent()
-        .set(&DataKey::SnapshotTotal(snapshot_id), &total);
+        .set(&DataKey::SnapshotTotal(snapshot_id as u64), &total);
 }
 
 /// Reads the snapshot balance for an address under `snapshot_id`.
 pub fn get_snapshot(e: &Env, snapshot_id: u32, holder: &Address) -> Option<i128> {
     e.storage()
         .persistent()
-        .get(&DataKey::Snapshot(snapshot_id, holder.clone()))
+        .get(&DataKey::Snapshot(snapshot_id as u64, holder.clone()))
 }
 
 /// Distributes a dividend of `total` among `holders` pro rata to their snapshot balance.
@@ -52,7 +53,7 @@ pub fn distribute_dividend(
     let snapshot_total: i128 = e
         .storage()
         .persistent()
-        .get(&DataKey::SnapshotTotal(snapshot_id))
+        .get(&DataKey::SnapshotTotal(snapshot_id as u64))
         .unwrap_or(0);
 
     if snapshot_total == 0 {
