@@ -77,14 +77,6 @@ fn add_holder(e: &Env, account: &Address) {
     }
 }
 
-/// Drops `account` from the holder set once its balance reaches zero.
-fn remove_holder(e: &Env, account: &Address) {
-    let mut index = holders(e);
-    if let Some(position) = index.first_index_of(account.clone()) {
-        index.remove(position);
-        e.storage().persistent().set(&DataKey::Holders, &index);
-    }
-}
 
 /// Number of accounts currently holding a non-zero balance.
 pub fn total_holders(e: &Env) -> u32 {
