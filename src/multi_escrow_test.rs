@@ -4,7 +4,7 @@
 //! Each entry point is exercised through a contract client so every call is a
 //! fresh host invocation with its own authorization frame.
 
-use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{contract, contractimpl, vec, Address, Env, Vec};
 
 use crate::multi_escrow;
@@ -51,7 +51,8 @@ fn setup() -> (Env, Address, Address, Vec<Address>, Vec<i128>) {
     let depositor = Address::generate(&e);
     let first = Address::generate(&e);
     let second = Address::generate(&e);
-    let beneficiaries = vec![&e, first, second];
+    // Clone before moving into the Vec so `first` can still be returned (#1263).
+    let beneficiaries = vec![&e, first.clone(), second.clone()];
     let amounts = vec![&e, 400i128, 600i128];
     (e, depositor, first, beneficiaries, amounts)
 }

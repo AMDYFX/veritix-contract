@@ -206,6 +206,44 @@ impl VeriTixPay {
         balance::max_supply(&e)
     }
 
+    /// Pauses or resumes all token movement. Admin-only (#1261).
+    pub fn set_paused(e: Env, admin_addr: Address, paused: bool) {
+        bump_instance(&e);
+        admin::check_admin(&e, &admin_addr);
+        crate::control::set_paused(&e, paused);
+    }
+
+    /// Whether the contract is currently paused.
+    pub fn is_paused(e: Env) -> bool {
+        bump_instance(&e);
+        crate::control::is_paused(&e)
+    }
+
+    /// Freezes or thaws `account` so it cannot move tokens. Admin-only.
+    pub fn set_frozen(e: Env, admin_addr: Address, account: Address, frozen: bool) {
+        bump_instance(&e);
+        admin::check_admin(&e, &admin_addr);
+        crate::control::set_frozen(&e, &account, frozen);
+    }
+
+    /// Whether `account` is frozen.
+    pub fn is_frozen(e: Env, account: Address) -> bool {
+        bump_instance(&e);
+        crate::control::is_frozen(&e, &account)
+    }
+
+    /// All addresses currently holding a non-zero balance (#1260).
+    pub fn get_holders(e: Env) -> Vec<Address> {
+        bump_instance(&e);
+        balance::get_holders(&e)
+    }
+
+    /// Count of addresses with a non-zero balance.
+    pub fn total_holders(e: Env) -> u32 {
+        bump_instance(&e);
+        balance::total_holders(&e)
+    }
+
     /// Mints `amount` new tokens to `to`. Admin-only and supply-capped.
     pub fn mint(e: Env, admin_addr: Address, to: Address, amount: i128) {
         bump_instance(&e);
