@@ -273,6 +273,13 @@ impl VeriTixPay {
         allowance::approve(&e, &from, &spender, amount, expiration_ledger);
     }
 
+    /// The amount `spender` may still move on `from`'s behalf.
+    ///
+    /// Reads as `0` once the allowance has expired: an expired grant is spent,
+    /// not an error.
+    pub fn allowance(e: Env, from: Address, spender: Address) -> i128 {
+        bump_instance(&e);
+        allowance::allowance(&e, &from, &spender)
     /// Lowers an allowance by `amount`, saturating at zero.
     ///
     /// The owner authorizes the call. The grant's expiry is left unchanged, so
