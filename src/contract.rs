@@ -662,6 +662,12 @@ impl VeriTixPay {
     ) {
         crate::dividend::distribute_dividend(&e, &admin, snapshot_id, total, holders);
     }
+
+    /// Returns `(open_count, resolved_count, expired_count)` across all disputes.
+    pub fn dispute_stats(e: Env) -> (u32, u32, u32) {
+        bump_instance(&e);
+        crate::dispute_stats::dispute_stats(&e)
+    }
 }
 
 #[cfg(test)]
