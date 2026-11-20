@@ -166,3 +166,43 @@ mod tests {
         replace_split_recipient(&e, &sender, 8, &old, &Address::generate(&e));
     }
 }
+
+use soroban_sdk::{contracterror, contracttype, Address, Env, Vec};
+
+pub const MAX_SPLITS_PER_SENDER: u32 = 256;
+pub const MAX_PAGE_SIZE: u32 = 50;
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum SplitterError {
+    NotAuthorized = 1,
+    SplitNotFound = 2,
+    RecipientNotFound = 3,
+    SenderIndexLimitReached = 4,
+    InvalidSplitConfig = 5,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SplitRecipient {
+    pub recipient: Address,
+    pub bps: u32, // Basis points (e.g. 10_000 = 100%)
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SplitRecord {
+    pub id: u64,
+    pub sender: Address,
+    pub recipients: Vec<SplitRecipient>,
+    pub active: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SplitterDataKey {
+    SplitCounter,
+    Split(u64),
+    SenderSplits(Address),
+}
