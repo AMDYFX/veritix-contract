@@ -392,19 +392,19 @@ impl VeriTixPay {
     }
 
     /// Raises a dispute over `escrow_id`, freezing it until a ruling is final.
-    pub fn raise_dispute(e: Env, claimant: Address, escrow_id: u64, resolver: Option<Address>) {
+    pub fn raise_dispute(e: Env, claimant: Address, escrow_id: u32, resolver: Option<Address>) {
         bump_instance(&e);
         crate::dispute::raise_dispute(&e, &claimant, escrow_id, resolver);
     }
 
     /// Whether a dispute on `escrow_id` is still live and blocking settlement.
-    pub fn is_dispute_open(e: Env, escrow_id: u64) -> bool {
+    pub fn is_dispute_open(e: Env, escrow_id: u32) -> bool {
         bump_instance(&e);
         crate::dispute::is_dispute_open(&e, escrow_id)
     }
 
     /// The dispute record for `escrow_id`.
-    pub fn get_dispute(e: Env, escrow_id: u64) -> crate::storage_types::DisputeRecord {
+    pub fn get_dispute(e: Env, escrow_id: u32) -> crate::storage_types::DisputeRecord {
         bump_instance(&e);
         crate::dispute::get_dispute(&e, escrow_id)
     }
@@ -458,19 +458,19 @@ impl VeriTixPay {
 
     /// The arbiter picks a winner: records the ruling and opens the appeal
     /// window; a second call after the window lapses settles and pays.
-    pub fn resolve_dispute(e: Env, resolver: Address, escrow_id: u64, winner: Address) {
+    pub fn resolve_dispute(e: Env, resolver: Address, escrow_id: u32, winner: Address) {
         bump_instance(&e);
         crate::dispute::resolve_dispute(&e, resolver, escrow_id, winner);
     }
 
     /// The losing party escalates a ruling within the appeal window.
-    pub fn appeal_dispute(e: Env, caller: Address, escrow_id: u64) {
+    pub fn appeal_dispute(e: Env, caller: Address, escrow_id: u32) {
         bump_instance(&e);
         crate::dispute::appeal_dispute(&e, &caller, escrow_id);
     }
 
     /// The final, unappealable ruling: settles the escrow and pays the winner.
-    pub fn resolve_appeal(e: Env, resolver: Address, escrow_id: u64, winner: Address) {
+    pub fn resolve_appeal(e: Env, resolver: Address, escrow_id: u32, winner: Address) {
         bump_instance(&e);
         crate::dispute::resolve_appeal(&e, resolver, escrow_id, winner);
     }
