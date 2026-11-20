@@ -138,7 +138,7 @@ fn increase_value_locked(e: &Env, token: &Address, amount: i128) {
 /// one a user has already trusted with the escrow. The subtraction is checked
 /// rather than saturating so a bug surfaces here instead of as a silently wrong
 /// total.
-fn decrease_value_locked(e: &Env, token: &Address, amount: i128) {
+pub(crate) fn decrease_value_locked(e: &Env, token: &Address, amount: i128) {
     let current = value_locked(e, token);
     let new_total = current.checked_sub(amount).unwrap_or_else(|| {
         panic!(
@@ -378,7 +378,7 @@ pub fn release(e: &Env, caller: &Address, id: u32) {
         }
     }
     pay(e, &record.token, &record.beneficiary, payout);
-    decrease_value_locked(e, amount);
+    decrease_value_locked(e, &record.token, amount);
     record.status = EscrowStatus::Released;
     record.amount = 0;
     store_record(e, id, &record);
