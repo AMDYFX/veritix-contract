@@ -11,10 +11,9 @@ pub fn take_snapshot(e: &Env, admin: &Address, snapshot_id: u32, holders: Vec<Ad
     let mut total: i128 = 0;
     for holder in holders.iter() {
         let bal = balance::balance_of(e, &holder);
-        e.storage().persistent().set(
-            &DataKey::Snapshot(snapshot_id as u64, holder.clone()),
-            &bal,
-        );
+        e.storage()
+            .persistent()
+            .set(&DataKey::Snapshot(snapshot_id as u64, holder.clone()), &bal);
         total = total
             .checked_add(bal)
             .unwrap_or_else(|| panic!("SnapshotOverflow: balances overflow i128"));
