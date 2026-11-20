@@ -453,7 +453,7 @@ mod tests {
     #[test]
     fn history_retains_only_the_newest_executions() {
         let e = Env::default();
-        let contract_id = e.register_contract(None, HistoryHarness);
+        let contract_id = e.register(HistoryHarness, ());
         let client = HistoryHarnessClient::new(&e, &contract_id);
 
         assert_eq!(client.history(&9).len(), 0);

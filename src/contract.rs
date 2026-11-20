@@ -569,9 +569,13 @@ impl VeriTixPay {
 mod tests {
     use super::*;
     use crate::storage_types::EscrowStatus;
-    use soroban_sdk::testutils::{Address as _, Events as _};
+    use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
     use soroban_sdk::token::StellarAssetClient;
     use soroban_sdk::{vec, xdr, FromVal, IntoVal};
+
+    fn v<T: IntoVal<Env, soroban_sdk::Val>>(e: &Env, x: T) -> soroban_sdk::Val {
+        x.into_val(e)
+    }
 
     struct Fixture {
         e: Env,
@@ -797,7 +801,7 @@ mod tests {
             last_data(&f.e),
             xdr::ScVal::from_val(
                 &f.e,
-                &vec![&f.e, id.to_val(), 1_000i128.to_val(), 0i128.to_val()]
+                &vec![&f.e, v(&f.e, id), v(&f.e, 1_000i128), v(&f.e, 0i128)]
             )
         );
     }
@@ -822,7 +826,7 @@ mod tests {
     fn refund_pays_the_depositor_everything_held() {
         let f = Fixture::new();
         let (depositor, beneficiary, _token_address, token, id) = f.escrow(1_000);
-        f.e.ledger().with_mut(|l| l.sequence = 2_001);
+        f.e.ledger().set_sequence_number(2_001);
 
         f.client.refund_escrow(&depositor, &id);
 
@@ -835,7 +839,7 @@ mod tests {
     fn refund_marks_the_escrow_refunded_and_settled() {
         let f = Fixture::new();
         let (depositor, _beneficiary, token_address, _token, id) = f.escrow(1_000);
-        f.e.ledger().with_mut(|l| l.sequence = 2_001);
+        f.e.ledger().set_sequence_number(2_001);
 
         f.client.refund_escrow(&depositor, &id);
 
@@ -891,7 +895,7 @@ mod tests {
     fn a_refunded_escrow_cannot_be_released() {
         let f = Fixture::new();
         let (depositor, beneficiary, _token_address, token, id) = f.escrow(1_000);
-        f.e.ledger().with_mut(|l| l.sequence = 2_001);
+        f.e.ledger().set_sequence_number(2_001);
         f.client.refund_escrow(&depositor, &id);
 
         assert!(panics(|| {
@@ -906,7 +910,7 @@ mod tests {
         let f = Fixture::new();
         let (depositor, _beneficiary, _token_address, token, id) = f.escrow(1_000);
         f.client.release_escrow(&f.admin, &id);
-        f.e.ledger().with_mut(|l| l.sequence = 2_001);
+        f.e.ledger().set_sequence_number(2_001);
 
         assert!(panics(|| {
             f.client.refund_escrow(&depositor, &id);
@@ -918,7 +922,7 @@ mod tests {
     fn refund_emits_the_depositor_the_id_and_the_amount() {
         let f = Fixture::new();
         let (depositor, _beneficiary, _token_address, _token, id) = f.escrow(750);
-        f.e.ledger().with_mut(|l| l.sequence = 2_001);
+        f.e.ledger().set_sequence_number(2_001);
 
         f.client.refund_escrow(&depositor, &id);
 
@@ -931,7 +935,7 @@ mod tests {
         );
         assert_eq!(
             last_data(&f.e),
-            xdr::ScVal::from_val(&f.e, &vec![&f.e, id.to_val(), 750i128.to_val()])
+            xdr::ScVal::from_val(&f.e, &vec![&f.e, v(&f.e, id), v(&f.e, 750i128)])
         );
     }
 
@@ -1099,7 +1103,7 @@ mod tests {
             last_data(&f.e),
             xdr::ScVal::from_val(
                 &f.e,
-                &vec![&f.e, id.to_val(), 300i128.to_val(), 700i128.to_val()]
+                &vec![&f.e, v(&f.e, id), v(&f.e, 300i128), v(&f.e, 700i128)]
             )
         );
     }
