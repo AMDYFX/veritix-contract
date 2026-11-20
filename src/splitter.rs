@@ -29,7 +29,10 @@ pub fn replace_split_recipient(
     caller.require_auth();
 
     if split.distributed {
-        panic!("SplitAlreadyDistributed: split {} has already been distributed", split_id);
+        panic!(
+            "SplitAlreadyDistributed: split {} has already been distributed",
+            split_id
+        );
     }
 
     let recipient_index = split
@@ -37,7 +40,12 @@ pub fn replace_split_recipient(
         .iter()
         .position(|recipient| &recipient == old)
         .and_then(|index| u32::try_from(index).ok())
-        .unwrap_or_else(|| panic!("SplitRecipientNotFound: recipient is not in split {}", split_id));
+        .unwrap_or_else(|| {
+            panic!(
+                "SplitRecipientNotFound: recipient is not in split {}",
+                split_id
+            )
+        });
 
     split.recipients.set(recipient_index, new.clone());
     e.storage().persistent().set(&key, &split);
@@ -68,7 +76,10 @@ pub fn split_to_escrow(
     }
     sender.require_auth();
     if split.distributed {
-        panic!("SplitAlreadyDistributed: split {} has already been distributed", split_id);
+        panic!(
+            "SplitAlreadyDistributed: split {} has already been distributed",
+            split_id
+        );
     }
 
     split.distributed = true;
@@ -126,9 +137,7 @@ mod tests {
             shares_bps: vec![&e, 6_000, 4_000],
             distributed: false,
         };
-        e.storage()
-            .persistent()
-            .set(&DataKey::Split(7), &split);
+        e.storage().persistent().set(&DataKey::Split(7), &split);
 
         replace_split_recipient(&e, &sender, 7, &old, &new);
 
@@ -152,9 +161,7 @@ mod tests {
             shares_bps: vec![&e, 10_000],
             distributed: true,
         };
-        e.storage()
-            .persistent()
-            .set(&DataKey::Split(8), &split);
+        e.storage().persistent().set(&DataKey::Split(8), &split);
 
         replace_split_recipient(&e, &sender, 8, &old, &Address::generate(&e));
     }

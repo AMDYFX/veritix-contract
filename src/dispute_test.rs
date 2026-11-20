@@ -64,7 +64,9 @@ fn escrow(e: &Env, depositor: &Address, beneficiary: &Address, amount: i128) -> 
 /// a raised escrow records both before a dispute can reference it.
 fn seed_escrow(e: &Env, cid: &Address, id: u32, record: &EscrowRecord, locked: i128) {
     e.as_contract(cid, || {
-        e.storage().persistent().set(&DataKey::EscrowRecord(id), record);
+        e.storage()
+            .persistent()
+            .set(&DataKey::EscrowRecord(id), record);
         e.storage()
             .persistent()
             .set(&DataKey::EscrowLocked(record.depositor.clone()), &locked);
@@ -141,7 +143,13 @@ fn seed_full(
 fn raise_dispute_opens_and_views_agree() {
     let (e, cid, _resolver, depositor, beneficiary, id) = setup();
     let client = DisputeHarnessClient::new(&e, &cid);
-    seed_escrow(&e, &cid, id, &escrow(&e, &depositor, &beneficiary, 100), 100);
+    seed_escrow(
+        &e,
+        &cid,
+        id,
+        &escrow(&e, &depositor, &beneficiary, 100),
+        100,
+    );
 
     client.raise_dispute(&depositor, &id, &None);
 
@@ -165,7 +173,13 @@ fn is_dispute_open_is_false_without_a_dispute() {
 fn raise_dispute_twice_rejects() {
     let (e, cid, _resolver, depositor, beneficiary, id) = setup();
     let client = DisputeHarnessClient::new(&e, &cid);
-    seed_escrow(&e, &cid, id, &escrow(&e, &depositor, &beneficiary, 100), 100);
+    seed_escrow(
+        &e,
+        &cid,
+        id,
+        &escrow(&e, &depositor, &beneficiary, 100),
+        100,
+    );
 
     client.raise_dispute(&depositor, &id, &None);
     client.raise_dispute(&depositor, &id, &None);
@@ -287,7 +301,13 @@ fn expired_dispute_cannot_be_resolved() {
 fn resolve_dispute_rejects_a_stranger_resolver() {
     let (e, cid, _resolver, depositor, beneficiary, id) = setup();
     let client = DisputeHarnessClient::new(&e, &cid);
-    seed_escrow(&e, &cid, id, &escrow(&e, &depositor, &beneficiary, 100), 100);
+    seed_escrow(
+        &e,
+        &cid,
+        id,
+        &escrow(&e, &depositor, &beneficiary, 100),
+        100,
+    );
     client.raise_dispute(&depositor, &id, &Some(Address::generate(&e)));
 
     client.resolve_dispute(&Address::generate(&e), &id, &beneficiary);
@@ -386,7 +406,13 @@ fn resolve_appeal_requires_an_appeal() {
 fn party_cannot_arbitrate_own_dispute() {
     let (e, cid, _resolver, depositor, beneficiary, id) = setup();
     let client = DisputeHarnessClient::new(&e, &cid);
-    seed_escrow(&e, &cid, id, &escrow(&e, &depositor, &beneficiary, 100), 100);
+    seed_escrow(
+        &e,
+        &cid,
+        id,
+        &escrow(&e, &depositor, &beneficiary, 100),
+        100,
+    );
     client.raise_dispute(&depositor, &id, &Some(depositor.clone()));
 }
 

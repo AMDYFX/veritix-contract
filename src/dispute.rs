@@ -226,7 +226,10 @@ pub fn resolve_dispute(e: &Env, resolver: Address, escrow_id: u32, winner: Addre
         panic!("Unauthorized: caller is not the assigned resolver");
     }
     if record.is_final {
-        panic!("DisputeFinal: escrow {} already has a final ruling", escrow_id);
+        panic!(
+            "DisputeFinal: escrow {} already has a final ruling",
+            escrow_id
+        );
     }
 
     let escrow = read_escrow(e, escrow_id);
@@ -298,7 +301,10 @@ pub fn appeal_dispute(e: &Env, caller: &Address, escrow_id: u32) {
     let mut record = read_dispute(e, escrow_id);
 
     if record.is_final {
-        panic!("DisputeFinal: escrow {} already has a final ruling", escrow_id);
+        panic!(
+            "DisputeFinal: escrow {} already has a final ruling",
+            escrow_id
+        );
     }
     if record.status != DisputeStatus::Resolved {
         panic!(
@@ -389,10 +395,16 @@ pub fn expire_dispute(e: &Env, caller: &Address, escrow_id: u32) {
     caller.require_auth();
     let mut record = read_dispute(e, escrow_id);
     if record.is_final || record.status == DisputeStatus::Expired {
-        panic!("DisputeFinal: dispute on escrow {} is already final", escrow_id);
+        panic!(
+            "DisputeFinal: dispute on escrow {} is already final",
+            escrow_id
+        );
     }
     let escrow = read_escrow(e, escrow_id);
-    if caller != &escrow.depositor && caller != &escrow.beneficiary && !crate::admin::is_admin(e, caller) {
+    if caller != &escrow.depositor
+        && caller != &escrow.beneficiary
+        && !crate::admin::is_admin(e, caller)
+    {
         panic!(
             "Unauthorized: only the depositor, beneficiary, or admin may expire dispute on escrow {}",
             escrow_id
