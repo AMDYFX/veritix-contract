@@ -89,14 +89,22 @@ pub enum DataKey {
     MultiEscrow(u64),
     /// Number of multi-escrows created so far (also the next id).
     MultiEscrowCount,
-    /// Whether an account is whitelisted.
-    Whitelisted(Address),
     /// Monotonically increasing counter / nonce per address.
     Counter(Address),
     /// Dispute escrow ids indexed by claimant.
     ClaimantDisputes(Address),
     /// All escrow ids that have a dispute.
     DisputeIds,
+    /// A holder's snapshot balance under a given snapshot id.
+    Snapshot(u64, Address),
+    /// The total balance captured across all holders under a given snapshot id.
+    SnapshotTotal(u64),
+
+    // --- Protocol fee ----------------------------------------------------------
+    /// The configured protocol fee, in basis points.
+    ProtocolFeeBps,
+    /// The treasury address receiving protocol fees.
+    ProtocolFeeTreasury,
 }
 
 /// Where an escrow is in its lifecycle.

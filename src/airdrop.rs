@@ -13,11 +13,7 @@ pub fn airdrop(e: &Env, admin: &Address, token: &Address, total_amount: i128) {
     admin::check_admin(e, admin);
     require_positive_amount(total_amount);
 
-    let holders: Vec<Address> = e
-        .storage()
-        .persistent()
-        .get(&crate::storage_types::DataKey::HolderSet)
-        .unwrap_or_else(|| Vec::new(e));
+    let holders: Vec<Address> = balance::holders(e);
 
     let count = holders.len();
     if count == 0 {
