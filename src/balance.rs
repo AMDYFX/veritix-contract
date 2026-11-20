@@ -230,16 +230,7 @@ pub fn decrease_supply(e: &Env, amount: i128) {
 ///
 /// Panics through [`require_positive_amount`] on a non-positive `amount` and
 /// through [`increase_supply`] when the cap would be exceeded.
-pub fn mint(e: &Env, to: &Address, amount: i128) {
-    require_positive_amount(amount);
-    increase_supply(e, amount);
-    credit(e, to, amount);
-    Mint {
-        to: to.clone(),
-        amount,
-    }
-    .publish(e);
-}
+
 
 /// Destroys `amount` of `from`'s tokens, taking them out of circulation.
 ///
