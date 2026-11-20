@@ -60,6 +60,7 @@ The contract signals failure by panicking with a message of the form `Code: deta
 | `ShareTooSmall` | `airdrop` | total amount insufficient for distribution |
 | `SplitAlreadyDistributed` | `splitter` | split already distributed |
 | `SplitNotFound` | `splitter` | split not found |
+| `SplitOverflow` | `splitter` | share calculation overflows |
 | `SplitRecipientNotFound` | `splitter` | split recipient not found |
 | `SupplyCapExceeded` | `balance` | supply cap exceeded |
 | `SupplyOverflow` | `balance` | supply overflow |
