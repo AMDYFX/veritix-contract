@@ -235,6 +235,16 @@ impl VeriTixPay {
         allowance::approve(&e, &from, &spender, amount, expiration_ledger);
     }
 
+    /// Lowers an allowance by `amount`, saturating at zero.
+    ///
+    /// The owner authorizes the call. The grant's expiry is left unchanged, so
+    /// lowering an amount never slides its deadline.
+    pub fn decrease_allowance(e: Env, from: Address, spender: Address, amount: i128) {
+        bump_instance(&e);
+        from.require_auth();
+        allowance::decrease_allowance(&e, &from, &spender, amount);
+    }
+
     // ---- Escrow ---------------------------------------------------------
 
     /// Holds `amount` of `token` for `beneficiary` until the event settles, and
