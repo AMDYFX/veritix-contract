@@ -235,6 +235,18 @@ impl VeriTixPay {
         allowance::approve(&e, &from, &spender, amount, expiration_ledger);
     }
 
+    /// Burns `amount` of `from`'s tokens under `spender`'s allowance.
+    ///
+    /// The spender authorizes the call and the allowance is consumed before the
+    /// tokens move, so a spender can never burn more than `from` approved and a
+    /// burn that fails on the balance reverts the allowance reduction with it.
+    pub fn burn_from(e: Env, spender: Address, from: Address, amount: i128) {
+        bump_instance(&e);
+        spender.require_auth();
+        allowance::consume_allowance(&e, &from, &spender, amount);
+        balance::burn(&e, &from, amount);
+    }
+
     // ---- Escrow ---------------------------------------------------------
 
     /// Holds `amount` of `token` for `beneficiary` until the event settles, and
