@@ -593,6 +593,18 @@ impl VeriTixPay {
     ) {
         crate::dividend::distribute_dividend(&e, &admin, snapshot_id, total, holders);
     }
+
+    /// Emergency withdrawal of stranded tokens. Admin-only; refuses to touch escrowed funds.
+    pub fn emergency_withdraw(
+        e: Env,
+        admin: Address,
+        recipient: Address,
+        token: Address,
+        amount: i128,
+    ) {
+        bump_instance(&e);
+        crate::emergency::emergency_withdraw(&e, &admin, &recipient, &token, amount);
+    }
 }
 
 #[cfg(test)]
