@@ -210,9 +210,12 @@ pub fn increase_supply(e: &Env, amount: i128) {
 /// Panics with `SupplyUnderflow` when `amount` exceeds the current supply,
 /// which would mean burning tokens that were never minted.
 pub fn decrease_supply(e: &Env, amount: i128) {
-    let new_supply = total_supply(e)
-        .checked_sub(amount)
-        .unwrap_or_else(|| panic!("SupplyUnderflow: burning {} would drive supply below zero", amount));
+    let new_supply = total_supply(e).checked_sub(amount).unwrap_or_else(|| {
+        panic!(
+            "SupplyUnderflow: burning {} would drive supply below zero",
+            amount
+        )
+    });
     e.storage()
         .persistent()
         .set(&DataKey::TotalSupply, &new_supply);
