@@ -47,11 +47,13 @@ pub fn store(e: &Env, metadata: &TokenMetadata) {
 pub fn load(e: &Env) -> TokenMetadata {
     let fallback = defaults(e);
     TokenMetadata {
-        name: e.storage()
+        name: e
+            .storage()
             .persistent()
             .get(&DataKey::Name)
             .unwrap_or(fallback.name),
-        symbol: e.storage()
+        symbol: e
+            .storage()
             .persistent()
             .get(&DataKey::Symbol)
             .unwrap_or(fallback.symbol),
