@@ -173,9 +173,10 @@ pub fn increase_allowance(
 
     let (new_amount, new_expiration) = if current.amount > 0 && !is_expired(e, &current) {
         (
-            current.amount.checked_add(amount).unwrap_or_else(|| {
-                panic!("BalanceOverflow: increase would overflow i128")
-            }),
+            current
+                .amount
+                .checked_add(amount)
+                .unwrap_or_else(|| panic!("BalanceOverflow: increase would overflow i128")),
             current.expiration_ledger,
         )
     } else {
@@ -252,13 +253,7 @@ pub fn consume_allowance(e: &Env, owner: &Address, spender: &Address, amount: i1
 ///
 /// * `InsufficientAllowance` when the live allowance is below `amount`.
 /// * `InsufficientBalance` when `owner` holds less than `amount`.
-pub fn transfer_from(
-    e: &Env,
-    owner: &Address,
-    to: &Address,
-    spender: &Address,
-    amount: i128,
-) {
+pub fn transfer_from(e: &Env, owner: &Address, to: &Address, spender: &Address, amount: i128) {
     spender.require_auth();
     consume_allowance(e, owner, spender, amount);
     balance::transfer(e, owner, to, amount);
