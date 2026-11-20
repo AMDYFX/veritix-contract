@@ -273,6 +273,10 @@ impl VeriTixPay {
         allowance::approve(&e, &from, &spender, amount, expiration_ledger);
     }
 
+    /// Number of accounts currently holding a non-zero balance.
+    pub fn total_holders(e: Env) -> u32 {
+        bump_instance(&e);
+        balance::total_holders(&e)
     /// Burns `amount` of `from`'s tokens under `spender`'s allowance.
     ///
     /// The spender authorizes the call and the allowance is consumed before the
