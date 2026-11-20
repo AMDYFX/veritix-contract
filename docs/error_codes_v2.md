@@ -30,6 +30,7 @@ The contract signals failure by panicking with a message of the form `Code: deta
 | `EscrowSameParty` | `escrow` | escrow same party |
 | `EscrowUnderflow` | `escrow` | escrow underflow |
 | `ExpirationInPast` | `allowance` | expiration in past |
+| `FeeBpsExceedsCap` | `fee` | fee_bps exceeds max cap |
 | `Frozen` | `control` | frozen |
 | `InsufficientAllowance` | `allowance` | insufficient allowance |
 | `InsufficientBalance` | `balance` | insufficient balance |
