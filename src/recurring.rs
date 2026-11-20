@@ -397,11 +397,19 @@ mod tests {
         let (e, contract_id, payer, payee) = setup(50, true, false, 100);
         e.as_contract(&contract_id, || {
             pause_recurring(&e, &payer, 1);
-            let s: RecurringPayment = e.storage().persistent().get(&DataKey::Recurring(1)).unwrap();
+            let s: RecurringPayment = e
+                .storage()
+                .persistent()
+                .get(&DataKey::Recurring(1))
+                .unwrap();
             assert!(s.paused);
 
             resume_recurring(&e, &payee, 1);
-            let s: RecurringPayment = e.storage().persistent().get(&DataKey::Recurring(1)).unwrap();
+            let s: RecurringPayment = e
+                .storage()
+                .persistent()
+                .get(&DataKey::Recurring(1))
+                .unwrap();
             assert!(!s.paused);
             // next_execution was 50 (in the past); resumed at ledger 100, so next_execution is 100 + 10 = 110
             assert_eq!(s.next_execution, 110);
@@ -453,7 +461,7 @@ mod tests {
     #[test]
     fn history_retains_only_the_newest_executions() {
         let e = Env::default();
-        let contract_id = e.register_contract(None, HistoryHarness);
+        let contract_id = e.register(HistoryHarness, ());
         let client = HistoryHarnessClient::new(&e, &contract_id);
 
         assert_eq!(client.history(&9).len(), 0);

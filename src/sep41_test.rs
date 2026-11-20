@@ -461,25 +461,46 @@ fn every_required_event_uses_the_standard_topic() {
     let expiry = f.e.ledger().sequence() + 1_000;
 
     f.client.approve(&from, &spender, &500, &expiry);
-    assert_eq!(last_topics(&f.e)[0], xdr::ScVal::from_val(&f.e, &symbol_short!("approve").to_val()));
+    assert_eq!(
+        last_topics(&f.e)[0],
+        xdr::ScVal::from_val(&f.e, &symbol_short!("approve").to_val())
+    );
 
     f.client.transfer(&from, &to, &100);
-    assert_eq!(last_topics(&f.e)[0], xdr::ScVal::from_val(&f.e, &symbol_short!("transfer").to_val()));
+    assert_eq!(
+        last_topics(&f.e)[0],
+        xdr::ScVal::from_val(&f.e, &symbol_short!("transfer").to_val())
+    );
 
     f.client.transfer_from(&spender, &from, &to, &100);
-    assert_eq!(last_topics(&f.e)[0], xdr::ScVal::from_val(&f.e, &symbol_short!("transfer").to_val()));
+    assert_eq!(
+        last_topics(&f.e)[0],
+        xdr::ScVal::from_val(&f.e, &symbol_short!("transfer").to_val())
+    );
 
     f.client.burn(&from, &50);
-    assert_eq!(last_topics(&f.e)[0], xdr::ScVal::from_val(&f.e, &symbol_short!("burn").to_val()));
+    assert_eq!(
+        last_topics(&f.e)[0],
+        xdr::ScVal::from_val(&f.e, &symbol_short!("burn").to_val())
+    );
 
     f.client.burn_from(&spender, &from, &50);
-    assert_eq!(last_topics(&f.e)[0], xdr::ScVal::from_val(&f.e, &symbol_short!("burn").to_val()));
+    assert_eq!(
+        last_topics(&f.e)[0],
+        xdr::ScVal::from_val(&f.e, &symbol_short!("burn").to_val())
+    );
 
     f.client.clawback(&f.admin, &from, &50);
-    assert_eq!(last_topics(&f.e)[0], xdr::ScVal::from_val(&f.e, &symbol_short!("clawback").to_val()));
+    assert_eq!(
+        last_topics(&f.e)[0],
+        xdr::ScVal::from_val(&f.e, &symbol_short!("clawback").to_val())
+    );
 
     f.client.mint(&f.admin, &to, &50);
-    assert_eq!(last_topics(&f.e)[0], xdr::ScVal::from_val(&f.e, &symbol_short!("mint").to_val()));
+    assert_eq!(
+        last_topics(&f.e)[0],
+        xdr::ScVal::from_val(&f.e, &symbol_short!("mint").to_val())
+    );
 }
 
 // ---- Composition ---------------------------------------------------------
@@ -508,7 +529,10 @@ fn a_full_lifecycle_keeps_supply_and_balances_consistent() {
     assert_eq!(f.client.balance(&carol), 1_000);
     assert_eq!(f.client.total_supply(), 8_000);
     assert_eq!(f.client.total_holders(), 2);
-    assert_eq!(f.client.get_holders(), vec![&f.e, alice.clone(), carol.clone()]);
+    assert_eq!(
+        f.client.get_holders(),
+        vec![&f.e, alice.clone(), carol.clone()]
+    );
     assert_eq!(f.client.allowance(&bob, &spender), 0);
 }
 

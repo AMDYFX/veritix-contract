@@ -32,10 +32,7 @@ pub fn set_admin(e: &Env, admin_addr: &Address) {
 
 /// True when `caller` is the stored admin.
 pub fn is_admin(e: &Env, caller: &Address) -> bool {
-    e.storage()
-        .instance()
-        .get::<_, Address>(&DataKey::Admin)
-        == Some(caller.clone())
+    e.storage().instance().get::<_, Address>(&DataKey::Admin) == Some(caller.clone())
 }
 
 /// Requires that `caller` is the stored admin and authorized this invocation.

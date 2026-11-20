@@ -21,6 +21,8 @@ pub fn add_to_whitelist_batch(e: &Env, admin: &Address, accounts: Vec<Address>) 
         );
     }
     for account in accounts.iter() {
-        e.storage().persistent().set(&DataKey::Whitelisted(account), &true);
+        e.storage()
+            .persistent()
+            .set(&DataKey::Whitelisted(account), &true);
     }
 }

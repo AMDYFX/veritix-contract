@@ -6,7 +6,10 @@ use soroban_sdk::{Address, Env};
 /// The pause flag is contract-wide configuration, so it lives in instance
 /// storage alongside the admin and the supply counters (see `docs/ttl.md`).
 pub fn is_paused(e: &Env) -> bool {
-    e.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    e.storage()
+        .instance()
+        .get(&DataKey::Paused)
+        .unwrap_or(false)
 }
 
 /// Panics while the contract is paused.

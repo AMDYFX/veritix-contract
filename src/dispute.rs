@@ -18,7 +18,7 @@
 //! `is_dispute_open`/`get_dispute` are the read views clients use to render
 //! dispute state without guessing from the escrow status.
 
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{token::TokenClient, Address, Env};
 
 use crate::storage_types::{
     bump_persistent, DataKey, DisputeRecord, DisputeStatus, EscrowRecord, EscrowStatus,
@@ -226,7 +226,10 @@ pub fn resolve_dispute(e: &Env, resolver: Address, escrow_id: u32, winner: Addre
         panic!("Unauthorized: caller is not the assigned resolver");
     }
     if record.is_final {
-        panic!("DisputeFinal: escrow {} already has a final ruling", escrow_id);
+        panic!(
+            "DisputeFinal: escrow {} already has a final ruling",
+            escrow_id
+        );
     }
 
     let escrow = read_escrow(e, escrow_id);
@@ -298,7 +301,10 @@ pub fn appeal_dispute(e: &Env, caller: &Address, escrow_id: u32) {
     let mut record = read_dispute(e, escrow_id);
 
     if record.is_final {
-        panic!("DisputeFinal: escrow {} already has a final ruling", escrow_id);
+        panic!(
+            "DisputeFinal: escrow {} already has a final ruling",
+            escrow_id
+        );
     }
     if record.status != DisputeStatus::Resolved {
         panic!(
@@ -389,10 +395,16 @@ pub fn expire_dispute(e: &Env, caller: &Address, escrow_id: u32) {
     caller.require_auth();
     let mut record = read_dispute(e, escrow_id);
     if record.is_final || record.status == DisputeStatus::Expired {
-        panic!("DisputeFinal: dispute on escrow {} is already final", escrow_id);
+        panic!(
+            "DisputeFinal: dispute on escrow {} is already final",
+            escrow_id
+        );
     }
     let escrow = read_escrow(e, escrow_id);
-    if caller != &escrow.depositor && caller != &escrow.beneficiary && !crate::admin::is_admin(e, caller) {
+    if caller != &escrow.depositor
+        && caller != &escrow.beneficiary
+        && !crate::admin::is_admin(e, caller)
+    {
         panic!(
             "Unauthorized: only the depositor, beneficiary, or admin may expire dispute on escrow {}",
             escrow_id
@@ -417,11 +429,12 @@ pub fn expire_dispute(e: &Env, caller: &Address, escrow_id: u32) {
 /// Moves the escrowed amount to the winner when the winner is the beneficiary
 /// (a refund simply leaves the funds with the depositor), and marks the escrow
 /// `Released` or `Refunded`.
-fn settle_escrow(e: &Env, escrow_id: u64, winner: &Address, escrow: &EscrowRecord) {
+fn settle_escrow(e: &Env, escrow_id: u32, winner: &Address, escrow: &EscrowRecord) {
     let amount = escrow.amount;
     crate::validation::require_positive_amount(amount);
 
-    crate::escrow::pay(e, &escrow.token, winner, amount);
+    // #1172: escrow::pay is private to its module; pay through the token.
+    TokenClient::new(e, &escrow.token).transfer(&e.current_contract_address(), winner, &amount);
     crate::escrow::decrease_value_locked(e, amount);
 
     let status = if winner == &escrow.beneficiary {

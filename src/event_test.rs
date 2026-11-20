@@ -129,7 +129,10 @@ fn transfer_with_memo_keeps_the_standard_topics_and_adds_the_memo() {
     );
     let items = last_event_data_items(&f.e);
     assert_eq!(items.len(), 2);
-    assert_eq!(items[0], xdr::ScVal::from_val(&f.e, &250i128.into_val(&f.e)));
+    assert_eq!(
+        items[0],
+        xdr::ScVal::from_val(&f.e, &250i128.into_val(&f.e))
+    );
     assert_eq!(items[1], xdr::ScVal::from_val(&f.e, &note.to_val()));
 }
 
@@ -151,7 +154,10 @@ fn approve_event_matches_the_sep41_shape() {
             xdr::ScVal::from_val(&f.e, &spender.to_val()),
         ]
     );
-    assert_eq!(data, xdr::ScVal::from_val(&f.e, &vec![&f.e, 400i128, expiry].to_val()));
+    assert_eq!(
+        data,
+        xdr::ScVal::from_val(&f.e, &vec![&f.e, 400i128, expiry].to_val())
+    );
 }
 
 #[test]
@@ -222,7 +228,10 @@ fn escrow_locks_do_not_change_event_shapes() {
     f.client.transfer(&holder, &to, &100);
 
     let (topics, data) = last_event(&f.e);
-    assert_eq!(topics[0], xdr::ScVal::from_val(&f.e, &symbol_short!("transfer").to_val()));
+    assert_eq!(
+        topics[0],
+        xdr::ScVal::from_val(&f.e, &symbol_short!("transfer").to_val())
+    );
     assert_eq!(data, xdr::ScVal::from_val(&f.e, &100i128.into_val(&f.e)));
     assert_eq!(f.e.events().all().events().len(), 2);
 }
@@ -237,7 +246,10 @@ fn supply_cap_never_appears_in_an_event() {
     f.client.mint(&f.admin, &holder, &1_000);
 
     let (topics, data) = last_event(&f.e);
-    assert_eq!(topics[0], xdr::ScVal::from_val(&f.e, &symbol_short!("mint").to_val()));
+    assert_eq!(
+        topics[0],
+        xdr::ScVal::from_val(&f.e, &symbol_short!("mint").to_val())
+    );
     assert_eq!(data, xdr::ScVal::from_val(&f.e, &1_000i128.into_val(&f.e)));
 }
 
@@ -248,8 +260,7 @@ fn every_storage_key_referenced_by_events_is_part_of_the_declared_layout() {
     let f = Fixture::new();
     let holder = f.fund(1_000);
     f.e.as_contract(&f.contract_id, || {
-        f.e
-            .storage()
+        f.e.storage()
             .persistent()
             .set(&DataKey::EscrowLocked(holder.clone()), &250);
     });

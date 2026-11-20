@@ -251,7 +251,14 @@ impl VeriTixPay {
         deadline_ledger: u32,
     ) -> u32 {
         bump_instance(&e);
-        escrow::create(&e, &depositor, &beneficiary, &token, amount, deadline_ledger)
+        escrow::create(
+            &e,
+            &depositor,
+            &beneficiary,
+            &token,
+            amount,
+            deadline_ledger,
+        )
     }
 
     /// Pays the beneficiary everything still held and closes the escrow.
@@ -280,13 +287,23 @@ impl VeriTixPay {
     }
 
     /// A page of escrow ids created by `depositor` (at most 50 per call).
-    pub fn get_escrows_by_depositor(e: Env, depositor: Address, start: u32, limit: u32) -> Vec<u32> {
+    pub fn get_escrows_by_depositor(
+        e: Env,
+        depositor: Address,
+        start: u32,
+        limit: u32,
+    ) -> Vec<u32> {
         bump_instance(&e);
         escrow::ids_page(&e, &DataKey::DepositorEscrows(depositor), start, limit)
     }
 
     /// A page of escrow ids owed to `beneficiary` (at most 50 per call).
-    pub fn get_escrows_by_beneficiary(e: Env, beneficiary: Address, start: u32, limit: u32) -> Vec<u32> {
+    pub fn get_escrows_by_beneficiary(
+        e: Env,
+        beneficiary: Address,
+        start: u32,
+        limit: u32,
+    ) -> Vec<u32> {
         bump_instance(&e);
         escrow::ids_page(&e, &DataKey::BeneficiaryEscrows(beneficiary), start, limit)
     }
@@ -304,14 +321,24 @@ impl VeriTixPay {
     }
 
     /// Reassigns an unsettled escrow to a new beneficiary. Depositor only.
-    pub fn transfer_escrow_beneficiary(e: Env, depositor: Address, escrow_id: u32, new_beneficiary: Address) {
+    pub fn transfer_escrow_beneficiary(
+        e: Env,
+        depositor: Address,
+        escrow_id: u32,
+        new_beneficiary: Address,
+    ) {
         bump_instance(&e);
         escrow::transfer_beneficiary(&e, &depositor, escrow_id, &new_beneficiary);
     }
 
     /// Creates one escrow per recipient of split `split_id` for its share and
     /// returns the new escrow ids.
-    pub fn split_to_escrow(e: Env, sender: Address, split_id: u64, deadline_ledger: u32) -> Vec<u32> {
+    pub fn split_to_escrow(
+        e: Env,
+        sender: Address,
+        split_id: u64,
+        deadline_ledger: u32,
+    ) -> Vec<u32> {
         bump_instance(&e);
         crate::splitter::split_to_escrow(&e, &sender, split_id, deadline_ledger)
     }
@@ -365,19 +392,19 @@ impl VeriTixPay {
     }
 
     /// Raises a dispute over `escrow_id`, freezing it until a ruling is final.
-    pub fn raise_dispute(e: Env, claimant: Address, escrow_id: u64, resolver: Option<Address>) {
+    pub fn raise_dispute(e: Env, claimant: Address, escrow_id: u32, resolver: Option<Address>) {
         bump_instance(&e);
         crate::dispute::raise_dispute(&e, &claimant, escrow_id, resolver);
     }
 
     /// Whether a dispute on `escrow_id` is still live and blocking settlement.
-    pub fn is_dispute_open(e: Env, escrow_id: u64) -> bool {
+    pub fn is_dispute_open(e: Env, escrow_id: u32) -> bool {
         bump_instance(&e);
         crate::dispute::is_dispute_open(&e, escrow_id)
     }
 
     /// The dispute record for `escrow_id`.
-    pub fn get_dispute(e: Env, escrow_id: u64) -> crate::storage_types::DisputeRecord {
+    pub fn get_dispute(e: Env, escrow_id: u32) -> crate::storage_types::DisputeRecord {
         bump_instance(&e);
         crate::dispute::get_dispute(&e, escrow_id)
     }
@@ -431,19 +458,19 @@ impl VeriTixPay {
 
     /// The arbiter picks a winner: records the ruling and opens the appeal
     /// window; a second call after the window lapses settles and pays.
-    pub fn resolve_dispute(e: Env, resolver: Address, escrow_id: u64, winner: Address) {
+    pub fn resolve_dispute(e: Env, resolver: Address, escrow_id: u32, winner: Address) {
         bump_instance(&e);
         crate::dispute::resolve_dispute(&e, resolver, escrow_id, winner);
     }
 
     /// The losing party escalates a ruling within the appeal window.
-    pub fn appeal_dispute(e: Env, caller: Address, escrow_id: u64) {
+    pub fn appeal_dispute(e: Env, caller: Address, escrow_id: u32) {
         bump_instance(&e);
         crate::dispute::appeal_dispute(&e, &caller, escrow_id);
     }
 
     /// The final, unappealable ruling: settles the escrow and pays the winner.
-    pub fn resolve_appeal(e: Env, resolver: Address, escrow_id: u64, winner: Address) {
+    pub fn resolve_appeal(e: Env, resolver: Address, escrow_id: u32, winner: Address) {
         bump_instance(&e);
         crate::dispute::resolve_appeal(&e, resolver, escrow_id, winner);
     }
@@ -502,7 +529,10 @@ impl VeriTixPay {
     /// # Panics
     ///
     /// Panics when no multi-escrow exists at `multi_escrow_id`.
-    pub fn get_multi_escrow(e: Env, multi_escrow_id: u64) -> crate::storage_types::MultiEscrowRecord {
+    pub fn get_multi_escrow(
+        e: Env,
+        multi_escrow_id: u64,
+    ) -> crate::storage_types::MultiEscrowRecord {
         bump_instance(&e);
         crate::multi_escrow::record(&e, multi_escrow_id)
     }
@@ -569,9 +599,13 @@ impl VeriTixPay {
 mod tests {
     use super::*;
     use crate::storage_types::EscrowStatus;
-    use soroban_sdk::testutils::{Address as _, Events as _};
+    use soroban_sdk::testutils::{Address as _, Events as _, Ledger as _};
     use soroban_sdk::token::StellarAssetClient;
     use soroban_sdk::{vec, xdr, FromVal, IntoVal};
+
+    fn v<T: IntoVal<Env, soroban_sdk::Val>>(e: &Env, x: T) -> soroban_sdk::Val {
+        x.into_val(e)
+    }
 
     struct Fixture {
         e: Env,
@@ -648,18 +682,14 @@ mod tests {
     fn last_topics(e: &Env) -> std::vec::Vec<xdr::ScVal> {
         let events = e.events().all();
         let last = events.events().last().expect("no event was emitted");
-        let xdr::ContractEventBody::V0(body) = &last.body else {
-            panic!("expected a v0 contract event");
-        };
+        let xdr::ContractEventBody::V0(body) = &last.body;
         body.topics.to_vec()
     }
 
     fn last_data(e: &Env) -> xdr::ScVal {
         let events = e.events().all();
         let last = events.events().last().expect("no event was emitted");
-        let xdr::ContractEventBody::V0(body) = &last.body else {
-            panic!("expected a v0 contract event");
-        };
+        let xdr::ContractEventBody::V0(body) = &last.body;
         body.data.clone()
     }
 
@@ -797,7 +827,7 @@ mod tests {
             last_data(&f.e),
             xdr::ScVal::from_val(
                 &f.e,
-                &vec![&f.e, id.to_val(), 1_000i128.to_val(), 0i128.to_val()]
+                &vec![&f.e, v(&f.e, id), v(&f.e, 1_000i128), v(&f.e, 0i128)]
             )
         );
     }
@@ -822,7 +852,7 @@ mod tests {
     fn refund_pays_the_depositor_everything_held() {
         let f = Fixture::new();
         let (depositor, beneficiary, _token_address, token, id) = f.escrow(1_000);
-        f.e.ledger().with_mut(|l| l.sequence = 2_001);
+        f.e.ledger().set_sequence_number(2_001);
 
         f.client.refund_escrow(&depositor, &id);
 
@@ -835,7 +865,7 @@ mod tests {
     fn refund_marks_the_escrow_refunded_and_settled() {
         let f = Fixture::new();
         let (depositor, _beneficiary, token_address, _token, id) = f.escrow(1_000);
-        f.e.ledger().with_mut(|l| l.sequence = 2_001);
+        f.e.ledger().set_sequence_number(2_001);
 
         f.client.refund_escrow(&depositor, &id);
 
@@ -891,7 +921,7 @@ mod tests {
     fn a_refunded_escrow_cannot_be_released() {
         let f = Fixture::new();
         let (depositor, beneficiary, _token_address, token, id) = f.escrow(1_000);
-        f.e.ledger().with_mut(|l| l.sequence = 2_001);
+        f.e.ledger().set_sequence_number(2_001);
         f.client.refund_escrow(&depositor, &id);
 
         assert!(panics(|| {
@@ -906,7 +936,7 @@ mod tests {
         let f = Fixture::new();
         let (depositor, _beneficiary, _token_address, token, id) = f.escrow(1_000);
         f.client.release_escrow(&f.admin, &id);
-        f.e.ledger().with_mut(|l| l.sequence = 2_001);
+        f.e.ledger().set_sequence_number(2_001);
 
         assert!(panics(|| {
             f.client.refund_escrow(&depositor, &id);
@@ -918,7 +948,7 @@ mod tests {
     fn refund_emits_the_depositor_the_id_and_the_amount() {
         let f = Fixture::new();
         let (depositor, _beneficiary, _token_address, _token, id) = f.escrow(750);
-        f.e.ledger().with_mut(|l| l.sequence = 2_001);
+        f.e.ledger().set_sequence_number(2_001);
 
         f.client.refund_escrow(&depositor, &id);
 
@@ -931,7 +961,7 @@ mod tests {
         );
         assert_eq!(
             last_data(&f.e),
-            xdr::ScVal::from_val(&f.e, &vec![&f.e, id.to_val(), 750i128.to_val()])
+            xdr::ScVal::from_val(&f.e, &vec![&f.e, v(&f.e, id), v(&f.e, 750i128)])
         );
     }
 
@@ -1099,7 +1129,7 @@ mod tests {
             last_data(&f.e),
             xdr::ScVal::from_val(
                 &f.e,
-                &vec![&f.e, id.to_val(), 300i128.to_val(), 700i128.to_val()]
+                &vec![&f.e, v(&f.e, id), v(&f.e, 300i128), v(&f.e, 700i128)]
             )
         );
     }
@@ -1186,20 +1216,23 @@ mod tests {
         assert!(!f.client.is_whitelisted(&u1));
         assert!(!f.client.is_whitelisted(&u2));
 
-        f.client.add_to_whitelist_batch(&f.admin, &vec![&f.e, u1.clone(), u2.clone()]);
+        f.client
+            .add_to_whitelist_batch(&f.admin, &vec![&f.e, u1.clone(), u2.clone()]);
         assert!(f.client.is_whitelisted(&u1));
         assert!(f.client.is_whitelisted(&u2));
 
         let nonce = f.client.get_whitelist_nonce(&f.admin);
         assert_eq!(nonce, 0);
 
-        f.client.add_to_whitelist_signed(&f.admin, &vec![&f.e, u3.clone()], &0);
+        f.client
+            .add_to_whitelist_signed(&f.admin, &vec![&f.e, u3.clone()], &0);
         assert!(f.client.is_whitelisted(&u3));
         assert_eq!(f.client.get_whitelist_nonce(&f.admin), 1);
 
         // Reusing nonce 0 panics
         assert!(panics(|| {
-            f.client.add_to_whitelist_signed(&f.admin, &vec![&f.e, u3.clone()], &0);
+            f.client
+                .add_to_whitelist_signed(&f.admin, &vec![&f.e, u3.clone()], &0);
         }));
     }
 
@@ -1228,18 +1261,21 @@ mod tests {
 
         // Lock 600 in escrow
         let b = Address::generate(&f.e);
-        f.client.create_escrow(&depositor, &b, &token_address, &600, &2_000);
+        f.client
+            .create_escrow(&depositor, &b, &token_address, &600, &2_000);
 
         // Stranded funds: mint 400 extra directly to contract
         token.mint(&f.contract, &400);
 
         // Trying to withdraw more than unescrowed (400) panics
         assert!(panics(|| {
-            f.client.emergency_withdraw(&f.admin, &recipient, &token_address, &500);
+            f.client
+                .emergency_withdraw(&f.admin, &recipient, &token_address, &500);
         }));
 
         // Withdrawing unescrowed 400 succeeds
-        f.client.emergency_withdraw(&f.admin, &recipient, &token_address, &400);
+        f.client
+            .emergency_withdraw(&f.admin, &recipient, &token_address, &400);
         assert_eq!(token.balance(&recipient), 400);
     }
 }
