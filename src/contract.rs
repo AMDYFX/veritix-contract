@@ -235,6 +235,12 @@ impl VeriTixPay {
         allowance::approve(&e, &from, &spender, amount, expiration_ledger);
     }
 
+    /// Number of accounts currently holding a non-zero balance.
+    pub fn total_holders(e: Env) -> u32 {
+        bump_instance(&e);
+        balance::total_holders(&e)
+    }
+
     // ---- Escrow ---------------------------------------------------------
 
     /// Holds `amount` of `token` for `beneficiary` until the event settles, and
