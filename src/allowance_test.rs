@@ -36,8 +36,7 @@ fn an_expired_allowance_cannot_be_spent() {
 
     // The grant is live up to and including its expiration ledger.
     f.e.ledger().set_sequence_number(1_000);
-    f.client
-        .transfer_from(&spender, &holder, &receiver, &500);
+    f.client.transfer_from(&spender, &holder, &receiver, &500);
 
     // Past it, the same spend is refused outright.
     let f = Fixture::new();
@@ -48,8 +47,7 @@ fn an_expired_allowance_cannot_be_spent() {
     f.e.ledger().set_sequence_number(1_001);
 
     assert!(panics(|| {
-        f.client
-            .transfer_from(&spender, &holder, &receiver, &100);
+        f.client.transfer_from(&spender, &holder, &receiver, &100);
     }));
     assert_eq!(f.client.balance(&holder), 1_000);
     assert_eq!(f.client.balance(&receiver), 0);
@@ -67,8 +65,7 @@ fn an_expiry_equal_to_the_current_ledger_is_still_live() {
     f.client.approve(&holder, &spender, &500, &1_000);
     f.e.ledger().set_sequence_number(1_000);
 
-    f.client
-        .transfer_from(&spender, &holder, &receiver, &500);
+    f.client.transfer_from(&spender, &holder, &receiver, &500);
 
     assert_eq!(f.client.balance(&receiver), 500);
 }
@@ -95,8 +92,7 @@ fn a_partial_spend_does_not_extend_the_deadline() {
     let spender = Address::generate(&f.e);
     f.client.approve(&holder, &spender, &500, &1_000);
 
-    f.client
-        .transfer_from(&spender, &holder, &receiver, &100);
+    f.client.transfer_from(&spender, &holder, &receiver, &100);
 
     assert_eq!(f.client.allowance_expiration(&holder, &spender), 1_000);
     assert_eq!(f.client.allowance(&holder, &spender), 400);
@@ -162,8 +158,7 @@ fn a_spend_reduces_the_allowance_by_exactly_the_amount_moved() {
     let spender = Address::generate(&f.e);
     f.client.approve(&holder, &spender, &500, &1_000_000);
 
-    f.client
-        .transfer_from(&spender, &holder, &receiver, &200);
+    f.client.transfer_from(&spender, &holder, &receiver, &200);
 
     assert_eq!(f.client.allowance(&holder, &spender), 300);
     assert_eq!(f.client.balance(&holder), 800);
@@ -195,10 +190,8 @@ fn spending_the_remaining_allowance_exactly_exhausts_it() {
     let spender = Address::generate(&f.e);
     f.client.approve(&holder, &spender, &500, &1_000_000);
 
-    f.client
-        .transfer_from(&spender, &holder, &receiver, &200);
-    f.client
-        .transfer_from(&spender, &holder, &receiver, &300);
+    f.client.transfer_from(&spender, &holder, &receiver, &200);
+    f.client.transfer_from(&spender, &holder, &receiver, &300);
 
     assert_eq!(f.client.allowance(&holder, &spender), 0);
     assert_eq!(f.client.balance(&receiver), 500);
@@ -213,8 +206,7 @@ fn one_token_more_than_the_allowance_is_refused() {
     f.client.approve(&holder, &spender, &500, &1_000_000);
 
     assert!(panics(|| {
-        f.client
-            .transfer_from(&spender, &holder, &receiver, &501);
+        f.client.transfer_from(&spender, &holder, &receiver, &501);
     }));
     // The refusal costs the spender nothing: the whole invocation reverted, so
     // the allowance is untouched.
@@ -232,8 +224,7 @@ fn a_spend_larger_than_the_balance_is_refused_without_touching_the_allowance() {
     f.client.approve(&holder, &spender, &500, &1_000_000);
 
     assert!(panics(|| {
-        f.client
-            .transfer_from(&spender, &holder, &receiver, &400);
+        f.client.transfer_from(&spender, &holder, &receiver, &400);
     }));
     assert_eq!(f.client.allowance(&holder, &spender), 500);
     assert_eq!(f.client.balance(&holder), 300);
@@ -247,8 +238,7 @@ fn spending_with_no_allowance_at_all_is_refused() {
     let spender = Address::generate(&f.e);
 
     assert!(panics(|| {
-        f.client
-            .transfer_from(&spender, &holder, &receiver, &1);
+        f.client.transfer_from(&spender, &holder, &receiver, &1);
     }));
     assert_eq!(f.client.balance(&holder), 1_000);
 }
@@ -261,11 +251,9 @@ fn an_allowance_cannot_be_spent_twice() {
     let spender = Address::generate(&f.e);
     f.client.approve(&holder, &spender, &500, &1_000_000);
 
-    f.client
-        .transfer_from(&spender, &holder, &receiver, &500);
+    f.client.transfer_from(&spender, &holder, &receiver, &500);
     assert!(panics(|| {
-        f.client
-            .transfer_from(&spender, &holder, &receiver, &1);
+        f.client.transfer_from(&spender, &holder, &receiver, &1);
     }));
 
     assert_eq!(f.client.balance(&receiver), 500);
@@ -282,8 +270,7 @@ fn one_token_is_the_smallest_positive_spend() {
     f.client.approve(&holder, &spender, &10, &1_000_000);
 
     for _ in 0..10 {
-        f.client
-            .transfer_from(&spender, &holder, &receiver, &1);
+        f.client.transfer_from(&spender, &holder, &receiver, &1);
     }
 
     assert_eq!(f.client.allowance(&holder, &spender), 0);
@@ -318,8 +305,7 @@ fn a_negative_spend_cannot_increase_the_allowance() {
     f.client.approve(&holder, &spender, &500, &1_000_000);
 
     assert!(panics(|| {
-        f.client
-            .transfer_from(&spender, &holder, &receiver, &-100);
+        f.client.transfer_from(&spender, &holder, &receiver, &-100);
     }));
     assert_eq!(f.client.allowance(&holder, &spender), 500);
     assert_eq!(f.client.balance(&holder), 1_000);
@@ -337,8 +323,7 @@ fn the_allowance_is_reduced_by_exactly_the_amount_and_not_the_balance() {
     let receiver = Address::generate(&f.e);
     f.client.approve(&holder, &spender, &500, &1_000_000);
 
-    f.client
-        .transfer_from(&spender, &holder, &receiver, &200);
+    f.client.transfer_from(&spender, &holder, &receiver, &200);
 
     assert_eq!(f.client.allowance(&holder, &spender), 300);
     assert_eq!(f.client.balance(&spender), 1_000);
@@ -371,7 +356,8 @@ fn increase_allowance_tops_up_a_live_grant_and_keeps_its_expiry() {
 
     // The second expiry is deliberately different: an increase must not
     // silently extend or shorten the window the owner chose.
-    f.client.increase_allowance(&holder, &spender, &200, &2_000_000);
+    f.client
+        .increase_allowance(&holder, &spender, &200, &2_000_000);
 
     assert_eq!(f.client.allowance(&holder, &spender), 700);
     assert_eq!(f.client.allowance_expiration(&holder, &spender), 1_000_000);
@@ -384,7 +370,8 @@ fn increase_allowance_creates_a_grant_when_none_is_live() {
     let spender = Address::generate(&f.e);
 
     // No approval first: this call is the whole grant.
-    f.client.increase_allowance(&holder, &spender, &300, &1_000_000);
+    f.client
+        .increase_allowance(&holder, &spender, &300, &1_000_000);
 
     assert_eq!(f.client.allowance(&holder, &spender), 300);
     assert_eq!(f.client.allowance_expiration(&holder, &spender), 1_000_000);
@@ -400,7 +387,8 @@ fn increase_allowance_ignores_an_expired_grant_and_starts_a_new_one() {
     f.client.approve(&holder, &spender, &500, &10);
 
     f.e.ledger().set_sequence_number(11);
-    f.client.increase_allowance(&holder, &spender, &200, &1_000_000);
+    f.client
+        .increase_allowance(&holder, &spender, &200, &1_000_000);
 
     assert_eq!(f.client.allowance(&holder, &spender), 200);
     assert_eq!(f.client.allowance_expiration(&holder, &spender), 1_000_000);
@@ -416,7 +404,8 @@ fn increase_allowance_refuses_a_negative_amount() {
     f.client.approve(&holder, &spender, &500, &1_000_000);
 
     assert!(panics(|| {
-        f.client.increase_allowance(&holder, &spender, &-1, &1_000_000);
+        f.client
+            .increase_allowance(&holder, &spender, &-1, &1_000_000);
     }));
     assert_eq!(f.client.allowance(&holder, &spender), 500);
 }
