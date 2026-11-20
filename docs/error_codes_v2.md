@@ -30,6 +30,7 @@ The contract signals failure by panicking with a message of the form `Code: deta
 | `EscrowSameParty` | `escrow` | escrow same party |
 | `EscrowUnderflow` | `escrow` | escrow underflow |
 | `ExpirationInPast` | `allowance` | expiration in past |
+| `FeeBpsExceedsCap` | `fee` | fee_bps exceeds max cap |
 | `Frozen` | `control` | frozen |
 | `InsufficientAllowance` | `allowance` | insufficient allowance |
 | `InsufficientBalance` | `balance` | insufficient balance |
@@ -60,6 +61,7 @@ The contract signals failure by panicking with a message of the form `Code: deta
 | `ShareTooSmall` | `airdrop` | total amount insufficient for distribution |
 | `SplitAlreadyDistributed` | `splitter` | split already distributed |
 | `SplitNotFound` | `splitter` | split not found |
+| `SplitOverflow` | `splitter` | share calculation overflows |
 | `SplitRecipientNotFound` | `splitter` | split recipient not found |
 | `SupplyCapExceeded` | `balance` | supply cap exceeded |
 | `SupplyOverflow` | `balance` | supply overflow |
