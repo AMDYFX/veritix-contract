@@ -77,14 +77,6 @@ fn add_holder(e: &Env, account: &Address) {
     }
 }
 
-/// Drops `account` from the holder set once its balance reaches zero.
-fn remove_holder(e: &Env, account: &Address) {
-    let mut index = holders(e);
-    if let Some(position) = index.first_index_of(account.clone()) {
-        index.remove(position);
-        e.storage().persistent().set(&DataKey::Holders, &index);
-    }
-}
 
 /// Number of accounts currently holding a non-zero balance.
 pub fn total_holders(e: &Env) -> u32 {
@@ -230,16 +222,7 @@ pub fn decrease_supply(e: &Env, amount: i128) {
 ///
 /// Panics through [`require_positive_amount`] on a non-positive `amount` and
 /// through [`increase_supply`] when the cap would be exceeded.
-pub fn mint(e: &Env, to: &Address, amount: i128) {
-    require_positive_amount(amount);
-    increase_supply(e, amount);
-    credit(e, to, amount);
-    Mint {
-        to: to.clone(),
-        amount,
-    }
-    .publish(e);
-}
+
 
 /// Destroys `amount` of `from`'s tokens, taking them out of circulation.
 ///
