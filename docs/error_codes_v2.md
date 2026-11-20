@@ -43,6 +43,7 @@ The contract signals failure by panicking with a message of the form `Code: deta
 | `MultiEscrowNotFound` | `multi_escrow` | multi escrow not found |
 | `MultiEscrowOverflow` | `multi_escrow` | multi escrow overflow |
 | `MultiEscrowSumMismatch` | `multi_escrow` | multi escrow sum mismatch |
+| `NoSnapshotTotal` | `dividend` | snapshot total is zero or missing |
 | `NoHolders` | `airdrop` | holder set is empty |
 | `NotAuthorized` | `authorization` | not authorized |
 | `NotInitialized` | `admin` | not initialized |
@@ -55,6 +56,7 @@ The contract signals failure by panicking with a message of the form `Code: deta
 | `RecurringNotFound` | `recurring` | recurring not found |
 | `RecurringPaused` | `recurring` | recurring paused |
 | `RecurringSameParty` | `recurring` | recurring same party |
+| `SnapshotOverflow` | `dividend` | snapshot balances overflow i128 |
 | `ShareTooSmall` | `airdrop` | total amount insufficient for distribution |
 | `SplitAlreadyDistributed` | `splitter` | split already distributed |
 | `SplitNotFound` | `splitter` | split not found |
