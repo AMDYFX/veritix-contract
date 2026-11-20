@@ -18,7 +18,7 @@
 //! `is_dispute_open`/`get_dispute` are the read views clients use to render
 //! dispute state without guessing from the escrow status.
 
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{token::TokenClient, Address, Env};
 
 use crate::storage_types::{
     bump_persistent, DataKey, DisputeRecord, DisputeStatus, EscrowRecord, EscrowStatus,
@@ -429,11 +429,12 @@ pub fn expire_dispute(e: &Env, caller: &Address, escrow_id: u32) {
 /// Moves the escrowed amount to the winner when the winner is the beneficiary
 /// (a refund simply leaves the funds with the depositor), and marks the escrow
 /// `Released` or `Refunded`.
-fn settle_escrow(e: &Env, escrow_id: u64, winner: &Address, escrow: &EscrowRecord) {
+fn settle_escrow(e: &Env, escrow_id: u32, winner: &Address, escrow: &EscrowRecord) {
     let amount = escrow.amount;
     crate::validation::require_positive_amount(amount);
 
-    crate::escrow::pay(e, &escrow.token, winner, amount);
+    // #1172: escrow::pay is private to its module; pay through the token.
+    TokenClient::new(e, &escrow.token).transfer(&e.current_contract_address(), winner, &amount);
     crate::escrow::decrease_value_locked(e, amount);
 
     let status = if winner == &escrow.beneficiary {
