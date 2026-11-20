@@ -241,6 +241,21 @@ pub fn mint(e: &Env, to: &Address, amount: i128) {
     .publish(e);
 }
 
+/// Destroys `amount` of `from`'s tokens, taking them out of circulation.
+///
+/// The debit runs before the supply shrinks so an insufficient balance aborts
+/// before the supply counter moves, and the amount is validated first.
+pub fn burn(e: &Env, from: &Address, amount: i128) {
+    require_positive_amount(amount);
+    debit(e, from, amount);
+    decrease_supply(e, amount);
+    Burn {
+        from: from.clone(),
+        amount,
+    }
+    .publish(e);
+}
+
 /// Recovers `amount` of `from`'s tokens for the admin, taking them out of
 /// circulation.
 ///

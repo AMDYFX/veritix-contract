@@ -206,6 +206,44 @@ impl VeriTixPay {
         balance::max_supply(&e)
     }
 
+    /// Pauses or resumes all token movement. Admin-only (#1261).
+    pub fn set_paused(e: Env, admin_addr: Address, paused: bool) {
+        bump_instance(&e);
+        admin::check_admin(&e, &admin_addr);
+        crate::control::set_paused(&e, paused);
+    }
+
+    /// Whether the contract is currently paused.
+    pub fn is_paused(e: Env) -> bool {
+        bump_instance(&e);
+        crate::control::is_paused(&e)
+    }
+
+    /// Freezes or thaws `account` so it cannot move tokens. Admin-only.
+    pub fn set_frozen(e: Env, admin_addr: Address, account: Address, frozen: bool) {
+        bump_instance(&e);
+        admin::check_admin(&e, &admin_addr);
+        crate::control::set_frozen(&e, &account, frozen);
+    }
+
+    /// Whether `account` is frozen.
+    pub fn is_frozen(e: Env, account: Address) -> bool {
+        bump_instance(&e);
+        crate::control::is_frozen(&e, &account)
+    }
+
+    /// All addresses currently holding a non-zero balance (#1260).
+    pub fn get_holders(e: Env) -> Vec<Address> {
+        bump_instance(&e);
+        balance::get_holders(&e)
+    }
+
+    /// Count of addresses with a non-zero balance.
+    pub fn total_holders(e: Env) -> u32 {
+        bump_instance(&e);
+        balance::total_holders(&e)
+    }
+
     /// Mints `amount` new tokens to `to`. Admin-only and supply-capped.
     pub fn mint(e: Env, admin_addr: Address, to: Address, amount: i128) {
         bump_instance(&e);
@@ -233,6 +271,37 @@ impl VeriTixPay {
         bump_instance(&e);
         from.require_auth();
         allowance::approve(&e, &from, &spender, amount, expiration_ledger);
+    }
+
+    /// The amount `spender` may still move on `from`'s behalf.
+    ///
+    /// Reads as `0` once the allowance has expired: an expired grant is spent,
+    /// not an error.
+    pub fn allowance(e: Env, from: Address, spender: Address) -> i128 {
+        bump_instance(&e);
+        allowance::allowance(&e, &from, &spender)
+    /// Lowers an allowance by `amount`, saturating at zero.
+    ///
+    /// The owner authorizes the call. The grant's expiry is left unchanged, so
+    /// lowering an amount never slides its deadline.
+    pub fn decrease_allowance(e: Env, from: Address, spender: Address, amount: i128) {
+        bump_instance(&e);
+        from.require_auth();
+        allowance::decrease_allowance(&e, &from, &spender, amount);
+    /// Number of accounts currently holding a non-zero balance.
+    pub fn total_holders(e: Env) -> u32 {
+        bump_instance(&e);
+        balance::total_holders(&e)
+    /// Burns `amount` of `from`'s tokens under `spender`'s allowance.
+    ///
+    /// The spender authorizes the call and the allowance is consumed before the
+    /// tokens move, so a spender can never burn more than `from` approved and a
+    /// burn that fails on the balance reverts the allowance reduction with it.
+    pub fn burn_from(e: Env, spender: Address, from: Address, amount: i128) {
+        bump_instance(&e);
+        spender.require_auth();
+        allowance::consume_allowance(&e, &from, &spender, amount);
+        balance::burn(&e, &from, amount);
     }
 
     // ---- Escrow ---------------------------------------------------------
@@ -598,6 +667,10 @@ impl VeriTixPay {
     pub fn get_whitelist_nonce(e: Env, admin: Address) -> u64 {
         bump_instance(&e);
         crate::whitelist_signed::get_nonce(&e, &admin)
+    /// Returns `(open_count, resolved_count, expired_count)` across all disputes.
+    pub fn dispute_stats(e: Env) -> (u32, u32, u32) {
+        bump_instance(&e);
+        crate::dispute_stats::dispute_stats(&e)
     }
 }
 
