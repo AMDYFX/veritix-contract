@@ -9,47 +9,49 @@ use soroban_sdk::{Address, Env};
 ///
 /// Panics when the split does not exist, `caller` is not its sender, the split
 /// has already been distributed, or `old` is not a recipient.
-pub fn replace_split_recipient(
-    e: &Env,
-    caller: &Address,
-    split_id: u64,
-    old: &Address,
-    new: &Address,
-) {
-    let key = DataKey::Split(split_id);
-    let mut split: SplitRecord = e
-        .storage()
-        .persistent()
-        .get(&key)
-        .unwrap_or_else(|| panic!("SplitNotFound: no split with id {}", split_id));
+/// Replaces `old_recipient` with `new_recipient` on `split_id`, panicking if
+    /// `new_recipient` is already a recipient in the split.
+    pub fn replace_split_recipient(
+        env: &Env,
+        split_id: u64,
+        old_recipient: Address,
+        new_recipient: Address,
+    ) -> Result<(), SplitterError> {
+        let mut record: SplitRecord = env
+            .storage()
+            .persistent()
+            .get(&SplitterDataKey::Split(split_id))
+            .ok_or(SplitterError::SplitNotFound)?;
 
-    if &split.sender != caller {
-        panic!("Unauthorized: only the split sender may replace recipients");
+        record.sender.require_auth();
+
+        // Prevent duplicate recipients that would cause double payouts
+        for entry in record.recipients.iter() {
+            if entry.recipient == new_recipient {
+                panic!("duplicate recipient in split");
+            }
+        }
+
+        let mut updated = Vec::new(env);
+        let mut found = false;
+        for mut item in record.recipients.iter() {
+            if item.recipient == old_recipient {
+                item.recipient = new_recipient.clone();
+                found = true;
+            }
+            updated.push_back(item);
+        }
+
+        if !found {
+            return Err(SplitterError::RecipientNotFound);
+        }
+
+        record.recipients = updated;
+        env.storage()
+            .persistent()
+            .set(&SplitterDataKey::Split(split_id), &record);
+        Ok(())
     }
-    caller.require_auth();
-
-    if split.distributed {
-        panic!(
-            "SplitAlreadyDistributed: split {} has already been distributed",
-            split_id
-        );
-    }
-
-    let recipient_index = split
-        .recipients
-        .iter()
-        .position(|recipient| &recipient == old)
-        .and_then(|index| u32::try_from(index).ok())
-        .unwrap_or_else(|| {
-            panic!(
-                "SplitRecipientNotFound: recipient is not in split {}",
-                split_id
-            )
-        });
-
-    split.recipients.set(recipient_index, new.clone());
-    e.storage().persistent().set(&key, &split);
-}
 
 /// Creates one escrow per recipient for its share of the split and returns the
 /// new escrow ids. The last recipient receives any rounding remainder.

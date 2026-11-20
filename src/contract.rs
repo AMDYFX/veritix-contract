@@ -1441,3 +1441,12 @@ pub mod testing {
         Bytes::from_slice(e, &std::vec![fill; len as usize])
     }
 }
+/// Replaces an existing recipient on a split with a new, unique recipient address.
+    pub fn replace_split_recipient(
+        env: Env,
+        split_id: u64,
+        old_recipient: Address,
+        new_recipient: Address,
+    ) -> Result<(), SplitterError> {
+        Splitter::replace_split_recipient(&env, split_id, old_recipient, new_recipient)
+    }
