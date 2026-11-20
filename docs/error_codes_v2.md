@@ -11,11 +11,13 @@ The contract signals failure by panicking with a message of the form `Code: deta
 | `AppealWindowOpen` | `dispute` | appeal window open |
 | `ArbiterNotSet` | `dispute` | arbiter not set |
 | `BalanceOverflow` | `balance` | balance overflow |
+| `BatchTooLarge` | `batch` | batch length exceeds the maximum |
 | `DisputeAlreadyOpen` | `dispute` | dispute already open |
 | `DisputeFinal` | `dispute` | dispute final |
 | `DisputeNoResolver` | `dispute` | dispute no resolver |
 | `DisputeNotAppealable` | `dispute` | dispute not appealable |
 | `DisputeNotAppealed` | `dispute` | dispute not appealed |
+| `DisputeNotExpired` | `dispute` | escrow deadline ledger has not passed yet |
 | `DisputeNotFound` | `dispute` | dispute not found |
 | `DisputeNotOpen` | `dispute` | dispute not open |
 | `EscrowDisputed` | `escrow` | escrow disputed |
