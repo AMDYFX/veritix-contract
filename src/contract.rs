@@ -593,6 +593,12 @@ impl VeriTixPay {
     ) {
         crate::dividend::distribute_dividend(&e, &admin, snapshot_id, total, holders);
     }
+
+    /// Returns the current whitelist nonce for `admin`.
+    pub fn get_whitelist_nonce(e: Env, admin: Address) -> u64 {
+        bump_instance(&e);
+        crate::whitelist_signed::get_nonce(&e, &admin)
+    }
 }
 
 #[cfg(test)]
