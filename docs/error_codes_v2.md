@@ -20,6 +20,8 @@ The contract signals failure by panicking with a message of the form `Code: deta
 | `DisputeNotExpired` | `dispute` | escrow deadline ledger has not passed yet |
 | `DisputeNotFound` | `dispute` | dispute not found |
 | `DisputeNotOpen` | `dispute` | dispute not open |
+| `DisputeSelfArbitration` | `dispute` | a party cannot arbitrate their own dispute |
+| `EmptyHolders` | `dividend` | at least one holder required |
 | `EscrowDisputed` | `escrow` | escrow disputed |
 | `EscrowIdOverflow` | `escrow` | escrow id overflow |
 | `EscrowNotActive` | `dispute`, `escrow` | escrow not active |
