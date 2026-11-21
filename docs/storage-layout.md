@@ -61,6 +61,7 @@ persistent.
 | `MultiEscrow(u64)` | A multi-beneficiary escrow held under its id. | Persistent |
 | `MultiEscrowCount` | Number of multi-escrows created so far (also the next id). | Persistent |
 | `Counter(Address)` | A monotonically increasing per-address counter. | Persistent |
+| `Snapshot(u64, Address)` | A holder's snapshot balance under a given snapshot id. | Persistent |
 
 ## TTL policy
 
@@ -104,4 +105,4 @@ exactly the case where the owner still cares, which is why reads bump too.
 4. Use `bump_persistent` on every read and write of the new key, or
    `bump_instance` if it is instance storage.
 5. If the key moves or renames an existing value, that is an upgrade-guide
-   concern, not a feature — see `docs/upgrade-guide.md`.
+   concern, not a feature — see `docs/upgrade-guide.md`
