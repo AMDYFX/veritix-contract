@@ -208,3 +208,19 @@ pub enum SplitterDataKey {
     Split(u64),
     SenderSplits(Address),
 }
+if recipients.is_empty() {
+            return Err(SplitterError::InvalidSplitConfig);
+        }
+
+        let mut total_bps: u32 = 0;
+        for entry in recipients.iter() {
+            if entry.bps == 0 {
+                return Err(SplitterError::InvalidSplitConfig);
+            }
+            total_bps = total_bps.saturating_add(entry.bps);
+        }
+
+        if total_bps != TOTAL_BPS {
+            // Includes the actual sum so callers/logs immediately see what was provided
+            panic!("split shares must total 10000 bps, got {}", total_bps);
+        }
