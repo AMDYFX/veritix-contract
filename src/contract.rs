@@ -1472,3 +1472,14 @@ pub mod testing {
         // Set up allowances for spender_a and spender_b from owner, then revoke all
         client.revoke_all_allowances(&owner);
     }
+    /// Creates a new payment split for `sender` across `recipients` with corresponding `shares_bps`.
+    pub fn create_split(
+        env: Env,
+        sender: Address,
+        token: Address,
+        total_amount: i128,
+        recipients: Vec<Address>,
+        shares_bps: Vec<u32>,
+    ) -> Result<u64, SplitterError> {
+        Splitter::create_split(&env, sender, token, total_amount, recipients, shares_bps)
+    }
