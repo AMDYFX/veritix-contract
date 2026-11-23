@@ -224,3 +224,22 @@ if recipients.is_empty() {
             // Includes the actual sum so callers/logs immediately see what was provided
             panic!("split shares must total 10000 bps, got {}", total_bps);
         }
+
+        pub const TOTAL_BPS: u32 = 10_000;
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SplitShare {
+    pub recipient: Address,
+    pub bps: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SplitRecord {
+    pub id: u64,
+    pub sender: Address,
+    pub token: Address,
+    pub total_amount: i128,
+    pub shares: Vec<SplitShare>,
+}
